@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import re
 from io import StringIO
 import os
+from datetime import datetime
 
 '''
 Changes to make:
@@ -46,7 +47,8 @@ def main():
     duty = extract("loadDutyCycle")
     chip_id = extract("CHIP_ID")
 
-    filename = f"{product_name}_{hw_rev}_Power-{load_power}_Period-{period}_Duty-{duty}_{chip_id}"
+    date_str = datetime.now().strftime("%Y%m%d")
+    filename = f"{product_name}_{hw_rev}_Power-{load_power}_Period-{period}_Duty-{duty}_{chip_id}_{date_str}"
     output_csv = f"csvs/{filename}.csv"
 
     # Add computed columns
