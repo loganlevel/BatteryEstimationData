@@ -9,7 +9,7 @@ csv_filename = os.path.splitext(os.path.basename(csv_path))[0]
 
 # Convert units
 df['elapsed_time_hr'] = df['elapsed_time'] / 3600  # seconds to hours
-df['charge_mAh'] = df['charge_C'] * 1000 / 3.6     # C to mAh (1 C = 1 A·s; 1 mAh = 3.6 C)
+df['charge_mAh'] = df['charge_C'] / 3.6     # C to mAh (1 C = 1 A·s; 1 mAh = 3.6 C)
 
 # Create plots
 fig, axs = plt.subplots(2, 2, figsize=(12, 8))
