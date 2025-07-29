@@ -59,20 +59,31 @@ def main():
     print(f"Saved parsed CSV to: {output_csv}")
 
     # Plotting
-    plot_dir = f"plots/{filename}"
+    plot_dir = "plots"
     os.makedirs(plot_dir, exist_ok=True)
 
     y_columns = [col for col in df.columns if col not in ["Timestamp", "Time Elapsed (hours)"]]
-    for col in y_columns:
-        plt.figure()
-        plt.plot(df["Time Elapsed (hours)"], df[col])
-        plt.xlabel("Time Elapsed (hours)")
-        plt.ylabel(col)
-        plt.title(f"{col} vs Time Elapsed")
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig(f"{plot_dir}/{col.replace(' ', '_')}.png")
-        print(f"Saved plot for '{col}' as {filename}_{col.replace(' ', '_')}.png")
+    n_plots = len(y_columns)
+    n_rows, n_cols = 2, 2
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(10, 8), sharex=True)
+    axes = axes.flatten()
+
+    for i, col in enumerate(y_columns):
+        if i >= n_rows * n_cols:
+            break
+        ax = axes[i]
+        ax.plot(df["Time Elapsed (hours)"], df[col])
+        ax.set_ylabel(col)
+        ax.set_title(f"{col} vs Time Elapsed")
+        ax.grid(True)
+
+    for ax in axes:
+        ax.set_xlabel("Time Elapsed (hours)")
+
+    plt.tight_layout()
+    output_png = f"{plot_dir}/{filename}_all_plots.png"
+    plt.savefig(output_png)
+    print(f"Saved all plots as: {output_png}")
 
 if __name__ == "__main__":
     main()

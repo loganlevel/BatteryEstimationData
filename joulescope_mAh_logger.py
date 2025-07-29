@@ -32,8 +32,8 @@ class BatteryLogger:
             with open(self.csv_filename, 'w', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow([
-                    'timestamp', 'elapsed_time_s', 'charge_C', 'energy_J',
-                    'avg_voltage_V', 'min_voltage_V', 'avg_current_A', 'min_current_A'
+                    'timestamp', 'elapsed_time', 'mAh',
+                    'avg_voltage_V', 'min_voltage_V', 'avg_current_A', 'max_current_A'
                 ])
 
     def _reset_interval_data(self):
@@ -50,9 +50,8 @@ class BatteryLogger:
             self._stat_first = stats
         self._stat_now = stats
 
-        elapsed = t - self._stat_first['time']['range']['value'][0]
-        charge = stats['accumulators']['charge']['value'] - self._stat_first['accumulators']['charge']['value']
-        energy = stats['accumulators']['energy']['value'] - self._stat_first['accumulators']['energy']['value']
+        elapsed = (t - self._stat_first['time']['range']['value'][0]) / 3600
+        mAh = (stats['accumulators']['charge']['value'] - self._stat_first['accumulators']['charge']['value']) / 3.6
 
         self.voltages.append(v)
         self.currents.append(i)
@@ -62,17 +61,17 @@ class BatteryLogger:
             avg_v = sum(self.voltages) / len(self.voltages)
             min_v = min(self.voltages)
             avg_i = sum(self.currents) / len(self.currents)
-            min_i = min(self.currents)
+            max_i = max(self.currents)
             timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
 
             with open(self.csv_filename, 'a', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow([
-                    timestamp, round(elapsed, 1), round(charge, 9), round(energy, 9),
-                    round(avg_v, 3), round(min_v, 3), round(avg_i, 9), round(min_i, 9)
+                    timestamp, round(elapsed, 1), round(mAh, 9),
+                    round(avg_v, 3), round(min_v, 3), round(avg_i, 9), round(max_i, 9)
                 ])
 
-            print(f'[{timestamp}] Log written: charge={charge:.9f} C, energy={energy:.9f} J')
+            print(f'[{timestamp}] Log written, {round(mAh, 3)} mAh')
             self._reset_interval_data()
 
 
