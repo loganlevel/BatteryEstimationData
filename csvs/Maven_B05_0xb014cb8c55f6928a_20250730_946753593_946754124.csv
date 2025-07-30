@@ -1,0 +1,4 @@
+timestamp,temp,batt_mV,soundDroop_mV,boltDroop_mV,brownout,Time Elapsed (hours),soundDroopMag_mV,boltDroopMag_mV
+946753593,25,2884,2809,2228,True,0.0,75,656
+946754116,25,2962,2910,2801,True,0.14527777777777778,52,161
+946754124,25,2962,2908,2822,False,0.1475,54,140
