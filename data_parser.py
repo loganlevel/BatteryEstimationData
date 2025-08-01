@@ -10,7 +10,6 @@ def main():
     print("Paste the full input below, then press Enter then Ctrl+D (Linux/macOS) or Ctrl+Z then Enter (Windows):\n")
     raw_input = sys.stdin.read()
 
-    # Extract metadata
     def extract(key, fallback="UNKNOWN"):
         match = re.search(rf"{key}:\s+(.+)", raw_input)
         return match.group(1).strip() if match else fallback
@@ -24,6 +23,7 @@ def main():
     load_dur = extract("loadDurationSeconds")
     relax_dur = extract("relaxDurationSeconds")
     bolt_checks = extract("boltChecks")
+
     try:
         build_dt = datetime.strptime(build_time_str, "%b %d %Y %H:%M:%S")
         date_str = build_dt.strftime("%Y%m%d")
@@ -48,8 +48,12 @@ def main():
     df["soundDroopMag_mV"] = df["batt_mV"] - df["soundDroop_mV"]
     df["boltDroopMag_mV"] = df["batt_mV"] - df["boltDroop_mV"]
 
-    filename = f"{product_name}_{hw_rev}_{chip_id}_{date_str}_droop{droop_volume}_load{load_volume}_loaddur{load_dur}_relaxdur{relax_dur}_boltchecks{bolt_checks}"
+    # Decode fault bitfields
+    df["fault_brownout"] = (df["brownout"] & 0x01) > 0
+    df["fault_bolt"]     = (df["brownout"] & 0x02) > 0
+    df["fault_sound"]    = (df["brownout"] & 0x04) > 0
 
+    filename = f"{product_name}_{hw_rev}_{chip_id}_{date_str}_droop{droop_volume}_load{load_volume}_loaddur{load_dur}_relaxdur{relax_dur}_boltchecks{bolt_checks}"
 
     # Save processed CSV
     os.makedirs("csvs", exist_ok=True)
@@ -59,7 +63,6 @@ def main():
 
     # Prepare plotting
     os.makedirs("plots", exist_ok=True)
-    brownout_mask = df["brownout"] == True
     time_col = "Time Elapsed (hours)"
 
     plots = [
@@ -74,11 +77,28 @@ def main():
     fig, axes = plt.subplots(3, 2, figsize=(14, 10), sharex=True)
     axes = axes.flatten()
 
+    total_time = df[time_col].iloc[-1] - df[time_col].iloc[0]
+    offset = total_time * 0.005  # 0.5% of the total duration
+    dot_size = 20
+
+
     for i, (col, param, unit) in enumerate(plots):
         ax = axes[i]
         ax.plot(df[time_col], df[col], label=param)
-        ax.scatter(df[time_col][brownout_mask], df[col][brownout_mask],
-                   color="red", label="Brownout Event", zorder=5)
+
+        # Add fault annotations with slight horizontal offsets
+        ax.scatter(df[time_col][df["fault_brownout"]] - offset,
+                   df[col][df["fault_brownout"]],
+                   color="red", label="Brownout", zorder=5, s=dot_size)
+
+        ax.scatter(df[time_col][df["fault_bolt"]],
+                   df[col][df["fault_bolt"]],
+                   color="orange", label="Bolt Fail", zorder=5, s=dot_size)
+
+        ax.scatter(df[time_col][df["fault_sound"]] + offset,
+                   df[col][df["fault_sound"]],
+                   color="purple", label="Sound Fail", zorder=5, s=dot_size)
+
         ax.set_title(f"{param} vs Time Elapsed")
         ax.set_ylabel(unit)
         ax.grid(True)
