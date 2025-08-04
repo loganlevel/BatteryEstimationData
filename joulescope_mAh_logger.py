@@ -48,9 +48,10 @@ class BatteryLogger:
 
         if self._stat_first is None:
             self._stat_first = stats
+            self._logging_start_time = time.time()
         self._stat_now = stats
 
-        elapsed = (t - self._stat_first['time']['range']['value'][0]) / 3600
+        elapsed = (time.time() - self._logging_start_time) / 60  # elapsed time in minutes
         mAh = (stats['accumulators']['charge']['value'] - self._stat_first['accumulators']['charge']['value']) / 3.6
 
         self.voltages.append(v)
