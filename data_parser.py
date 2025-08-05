@@ -49,9 +49,9 @@ def main():
     df["boltDroopMag_mV"] = df["batt_mV"] - df["boltDroop_mV"]
 
     # Decode fault bitfields
-    df["fault_brownout"] = (df["brownout"] & 0x01) > 0
-    df["fault_bolt"]     = (df["brownout"] & 0x02) > 0
-    df["fault_sound"]    = (df["brownout"] & 0x04) > 0
+    df["fault_brownout"] = (df["faults"] & 0x01) > 0
+    df["fault_bolt"]     = (df["faults"] & 0x02) > 0
+    df["fault_sound"]    = (df["faults"] & 0x04) > 0
 
     filename = f"{product_name}_{hw_rev}_{chip_id}_{date_str}_droop{droop_volume}_load{load_volume}_loaddur{load_dur}_relaxdur{relax_dur}_boltchecks{bolt_checks}"
 
