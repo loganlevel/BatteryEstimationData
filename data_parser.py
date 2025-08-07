@@ -81,7 +81,6 @@ def main():
     offset = total_time * 0.005  # 0.5% of the total duration
     dot_size = 20
 
-
     for i, (col, param, unit) in enumerate(plots):
         ax = axes[i]
         ax.plot(df[time_col], df[col], label=param)
@@ -103,6 +102,12 @@ def main():
         ax.set_ylabel(unit)
         ax.grid(True)
         ax.legend()
+
+        # Set y-axis limits
+        if col == "temp":
+            ax.set_ylim(-30, 70)
+        elif col == "batt_mV":
+            ax.set_ylim(0, 3400)  # mV for voltage plots
 
     for ax in axes:
         ax.set_xlabel("Time Elapsed (hours)")
