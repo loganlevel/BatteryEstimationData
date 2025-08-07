@@ -106,7 +106,7 @@ def main():
         # Set y-axis limits
         if col == "temp":
             ax.set_ylim(-30, 70)
-        elif col == "batt_mV":
+        else:
             ax.set_ylim(0, 3400)  # mV for voltage plots
 
     for ax in axes:
