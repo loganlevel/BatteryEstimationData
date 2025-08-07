@@ -78,6 +78,11 @@ def main():
     os.makedirs("plots", exist_ok=True)
     time_col = "Time Elapsed (hours)"
 
+    # If boltDroop_mV is all zeros, set boltDroopMag_mV to all zeros
+    if (df["boltDroop_mV"] == 0).all():
+        df["boltDroopMag_mV"] = 0
+        df.to_csv(CSV_FILE, index=False)
+
     plots = [
         ("temp", "Temperature", "°C"),
         ("batt_mV", "Battery Voltage", "mV"),

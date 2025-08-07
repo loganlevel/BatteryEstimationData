@@ -5,13 +5,18 @@ import os
 
 
 def main():
-    CSV_FILE = "csvs/Maven_B05_BE-7_20250801_droop2_load2_loaddur1800_relaxdur1800_boltcheckstrue.csv"
+    CSV_FILE = "csvs/temp-20/Maven_B05_BE-6_20250806_droop2_load0_loaddur900_relaxdur900_boltcheckstrue.csv"
     df = pd.read_csv(CSV_FILE)
     filename = os.path.splitext(os.path.basename(CSV_FILE))[0]
 
     # Prepare plotting
     os.makedirs("plots", exist_ok=True)
     time_col = "Time Elapsed (hours)"
+
+    # If boltDroop_mV is all zeros, set boltDroopMag_mV to all zeros
+    if (df["boltDroop_mV"] == 0).all():
+        df["boltDroopMag_mV"] = 0
+        df.to_csv(CSV_FILE, index=False)
 
     plots = [
         ("temp", "Temperature", "°C"),
