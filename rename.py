@@ -1,6 +1,7 @@
 import os
 
 dut_names_dict = {
+    "0xb014cb8c55f6928a": "BE-T",
     "0xf820357251287ce1": "BE-1",
     "0x07540ba7e21004bf": "BE-2",
     "0x679f80f90cea91dd": "BE-3",
