@@ -6,7 +6,7 @@ import math
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python3 parse_and_plot.py <csv_file_path>")
+        print("Usage: python3 csv_data_parser.py <csv_file_path>")
         return
 
     csv_file_path = sys.argv[1]
