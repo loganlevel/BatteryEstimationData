@@ -5,7 +5,7 @@ import os
 
 
 def main():
-    CSV_FILE = "csvs/Maven_B05_BE-6_20250806_droop255_load255_loaddur4294967295_relaxdur4294967295_boltcheckstrue.csv"
+    CSV_FILE = "csvs/Maven_B05_BE-7_20250801_droop2_load2_loaddur1800_relaxdur1800_boltcheckstrue.csv"
     df = pd.read_csv(CSV_FILE)
     filename = os.path.splitext(os.path.basename(CSV_FILE))[0]
 
