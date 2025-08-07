@@ -6,6 +6,19 @@ from io import StringIO
 import os
 from datetime import datetime
 
+dut_names_dict = {
+    "0xf820357251287ce1": "BE-1",
+    "0x07540ba7e21004bf": "BE-2",
+    "0x679f80f90cea91dd": "BE-3",
+    "0x77db265172dec07f": "BE-4",
+    "0x9e9556434662d576": "BE-5",
+    "0x862b09ac4bbb4604": "BE-6",
+    "0xb14c93f83f6fa826": "BE-7",
+    "0x9c15f93d401b4598": "BE-8",
+    "0x9c15f93d401b4598": "BE-8",
+    "": "BE-9",
+}
+
 def main():
     print("Paste the full input below, then press Enter then Ctrl+D (Linux/macOS) or Ctrl+Z then Enter (Windows):\n")
     raw_input = sys.stdin.read()
@@ -16,7 +29,7 @@ def main():
 
     product_name = extract("PRODUCT_NAME")
     hw_rev = extract("HW_REV")
-    chip_id = extract("CHIP_ID")
+    dut_id = dut_names_dict[extract("CHIP_ID")]
     build_time_str = extract("FW_BUILD_TIME", "")
     droop_volume = extract("droopVolume")
     load_volume = extract("loadVolume")
@@ -53,7 +66,7 @@ def main():
     df["fault_bolt"]     = (df["faults"] & 0x02) > 0
     df["fault_sound"]    = (df["faults"] & 0x04) > 0
 
-    filename = f"{product_name}_{hw_rev}_{chip_id}_{date_str}_droop{droop_volume}_load{load_volume}_loaddur{load_dur}_relaxdur{relax_dur}_boltchecks{bolt_checks}"
+    filename = f"{product_name}_{hw_rev}_{dut_id}_{date_str}_droop{droop_volume}_load{load_volume}_loaddur{load_dur}_relaxdur{relax_dur}_boltchecks{bolt_checks}"
 
     # Save processed CSV
     os.makedirs("csvs", exist_ok=True)
