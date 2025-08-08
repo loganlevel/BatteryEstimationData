@@ -48,35 +48,52 @@ for csv_path in csv_files:
         if col not in df.columns:
             continue
 
+        # Main line plot (with label for the series legend)
         ax.plot(df["Time Elapsed (hours)"], df[col], label=label)
 
-        # Plot fault markers
+        # Only create dummy handles for fault legend once (first CSV only)
+        if csv_path == csv_files[0]:
+            fault_handles = []
+            if "fault_brownout" in df.columns:
+                fault_handles.append(plt.Line2D([], [], color="red", marker='o', linestyle='None', markersize=dot_size/5, label="Brownout"))
+            if "fault_bolt" in df.columns:
+                fault_handles.append(plt.Line2D([], [], color="orange", marker='o', linestyle='None', markersize=dot_size/5, label="Bolt Fail"))
+            if "fault_sound" in df.columns:
+                fault_handles.append(plt.Line2D([], [], color="purple", marker='o', linestyle='None', markersize=dot_size/5, label="Sound Fail"))
+
+        # Plot actual fault markers (no label so they don't go in the series legend)
         if "fault_brownout" in df.columns:
             ax.scatter(df["Time Elapsed (hours)"][df["fault_brownout"]] - offset,
-                       df[col][df["fault_brownout"]],
-                       color="red", label="Brownout" if label == csv_files[0] else "", s=dot_size, zorder=5)
+                    df[col][df["fault_brownout"]],
+                    color="red", s=dot_size, zorder=5, label=None)
 
         if "fault_bolt" in df.columns:
             ax.scatter(df["Time Elapsed (hours)"][df["fault_bolt"]],
-                       df[col][df["fault_bolt"]],
-                       color="orange", label="Bolt Fail" if label == csv_files[0] else "", s=dot_size, zorder=5)
+                    df[col][df["fault_bolt"]],
+                    color="orange", s=dot_size, zorder=5, label=None)
 
         if "fault_sound" in df.columns:
             ax.scatter(df["Time Elapsed (hours)"][df["fault_sound"]] + offset,
-                       df[col][df["fault_sound"]],
-                       color="purple", label="Sound Fail" if label == csv_files[0] else "", s=dot_size, zorder=5)
+                    df[col][df["fault_sound"]],
+                    color="purple", s=dot_size, zorder=5, label=None)
 
         ax.set_title(f"{title} vs Time Elapsed")
         ax.set_ylabel(unit)
         ax.grid(True)
-        if i == 0:
-            ax.legend()
 
-        # y-axis limits
+        if i == 0:
+            # First legend: series lines only
+            series_legend = ax.legend(title="Series", loc="upper left")
+            ax.add_artist(series_legend)
+
+            # Second legend: faults only
+            ax.legend(handles=fault_handles, title="Faults", loc="upper right")
+
         if col == "temp":
             ax.set_ylim(-30, 70)
         else:
             ax.set_ylim(0, 3400)
+
 
 # X-axis label
 for ax in axes:
