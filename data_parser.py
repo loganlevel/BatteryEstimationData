@@ -62,9 +62,11 @@ def main():
     df["boltDroopMag_mV"] = df["batt_mV"] - df["boltDroop_mV"]
 
     # Decode fault bitfields
-    df["fault_brownout"] = (df["faults"] & 0x01) > 0
-    df["fault_bolt"]     = (df["faults"] & 0x02) > 0
-    df["fault_sound"]    = (df["faults"] & 0x04) > 0
+    df["fault_brownout"] = (df["faults"] & (1 << 0)) > 0
+    df["fault_bolt"] = (df["faults"] & (1 << 1)) > 0
+    df["fault_sound"] = (df["faults"] & (1 << 2)) > 0
+    df["fault_sound_brownout"] = (df["faults"] & (1 << 3)) > 0
+    df["fault_bolt_brownout"] = (df["faults"] & (1 << 4)) > 0
 
     filename = f"{product_name}_{hw_rev}_{dut_id}_{date_str}_droop{droop_volume}_load{load_volume}_loaddur{load_dur}_relaxdur{relax_dur}_boltchecks{bolt_checks}"
 
@@ -105,16 +107,26 @@ def main():
 
         # Add fault annotations with slight horizontal offsets
         ax.scatter(df[time_col][df["fault_brownout"]] - offset,
-                   df[col][df["fault_brownout"]],
-                   color="red", label="Brownout", zorder=5, s=dot_size)
+               df[col][df["fault_brownout"]],
+               color="red", label="Brownout", zorder=5, s=dot_size)
 
-        ax.scatter(df[time_col][df["fault_bolt"]],
-                   df[col][df["fault_bolt"]],
-                   color="orange", label="Bolt Fail", zorder=5, s=dot_size)
-
+        # Plot sound faults first
         ax.scatter(df[time_col][df["fault_sound"]] + offset,
-                   df[col][df["fault_sound"]],
-                   color="purple", label="Sound Fail", zorder=5, s=dot_size)
+               df[col][df["fault_sound"]],
+               color="purple", label="Sound Op Fail", zorder=5, s=dot_size)
+
+        ax.scatter(df[time_col][df["fault_sound_brownout"]] + 2*offset,
+               df[col][df["fault_sound_brownout"]],
+               color="blue", label="Sound Brownout", zorder=5, s=dot_size)
+
+        # Then plot bolt faults
+        ax.scatter(df[time_col][df["fault_bolt"]] - offset,
+               df[col][df["fault_bolt"]],
+               color="orange", label="Bolt Op Fail", zorder=5, s=dot_size)
+
+        ax.scatter(df[time_col][df["fault_bolt_brownout"]] - 2*offset,
+               df[col][df["fault_bolt_brownout"]],
+               color="green", label="Bolt Brownout", zorder=5, s=dot_size)
 
         ax.set_title(f"{param} vs Time Elapsed")
         ax.set_ylabel(unit)
