@@ -91,6 +91,10 @@ for csv_path in csv_files:
 
         if col == "temp":
             ax.set_ylim(-30, 70)
+        elif col == "batt_mV":
+            ax.set_ylim(2000, 3400)
+        elif col == "soundDroopMag_mV" or col == "boltDroopMag_mV":
+            ax.set_ylim(0, 2500)
         else:
             ax.set_ylim(0, 3400)
 
