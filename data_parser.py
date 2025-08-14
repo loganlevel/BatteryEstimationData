@@ -16,7 +16,7 @@ dut_names_dict = {
     "0xb14c93f83f6fa826": "BE-7",
     "0x9c15f93d401b4598": "BE-8",
     "0x9c15f93d401b4598": "BE-8",
-    "": "BE-9",
+    "0x5c84a4c09ecf87d8": "BE-9",
 }
 
 def main():
