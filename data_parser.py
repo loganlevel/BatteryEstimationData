@@ -83,7 +83,7 @@ def main():
     # If boltDroop_mV is all zeros, set boltDroopMag_mV to all zeros
     if (df["boltDroop_mV"] == 0).all():
         df["boltDroopMag_mV"] = 0
-        df.to_csv(CSV_FILE, index=False)
+        df.to_csv(output_csv, index=False)
 
     plots = [
         ("temp", "Temperature", "°C"),
