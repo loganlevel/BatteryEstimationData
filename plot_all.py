@@ -47,6 +47,7 @@ fault_present = {
 
 for csv_path in csv_files:
     df = pd.read_csv(csv_path)
+    df = df.iloc[:150]
 
     if "Time Elapsed (hours)" not in df.columns:
         print(f"Skipping {csv_path} (missing time column)")
