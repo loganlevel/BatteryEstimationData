@@ -7,10 +7,10 @@ from typing import Optional, List, Dict, Tuple
 from scipy.stats import spearmanr
 
 # ========== CONFIG ==========
-CSV_DIR   = "csvs/all-data-high-st"
+CSV_DIR   = "csvs/cross_temp"
 TIME_COL  = "Time Elapsed (hours)"
 TEMP_COL  = "temp"
-ROW_LIMIT = 160                 # match your plotting script window
+ROW_LIMIT = None                 # match your plotting script window
 MV_SUFFIX = "_mV"
 FAULT_COLS = [
     "fault_brownout",
@@ -20,8 +20,8 @@ FAULT_COLS = [
     "fault_bolt_brownout",
 ]
 NOISE_WINDOW = 3                # +/- samples for noise std at low-batt
-OUT_PER_FILE = "low_batt_per_file.csv"
-OUT_SUMMARY  = "signal_quality_summary.csv"
+OUT_PER_FILE = f"{CSV_DIR}/low_batt_per_file.csv"
+OUT_SUMMARY  = f"{CSV_DIR}/signal_quality_summary.csv"
 
 # ========== HELPERS ==========
 
@@ -71,10 +71,22 @@ def find_low_battery_index(df: pd.DataFrame) -> Optional[int]:
     idx_low = (t - t_target).abs().idxmin()
     return idx_low
 
-def mode_temperature(df: pd.DataFrame) -> Optional[float]:
-    if TEMP_COL not in df.columns:
+def mode_temperature_across_subfolder(csv_paths: List[str]) -> Optional[float]:
+    """
+    Computes the mode temperature across all rows in all CSVs in a subfolder.
+    Returns the most common temperature value (float) or None if not found.
+    """
+    temps = []
+    for path in csv_paths:
+        try:
+            df = pd.read_csv(path)
+            if TEMP_COL in df.columns:
+                temps.extend(df[TEMP_COL].dropna().tolist())
+        except Exception:
+            continue
+    if not temps:
         return None
-    m = df[TEMP_COL].mode(dropna=True)
+    m = pd.Series(temps).mode(dropna=True)
     if len(m) == 0:
         return None
     return float(m.iloc[0])
@@ -268,7 +280,9 @@ def main():
             continue
 
         # Mode temperature (reference & grouping)
-        temp_mode = mode_temperature(df)
+        folder_path = os.path.dirname(path)
+        csvs_in_folder = sorted(glob.glob(os.path.join(folder_path, "*.csv")))
+        temp_mode = mode_temperature_across_subfolder(csvs_in_folder)
         temp_mode_rounded = int(round(temp_mode)) if temp_mode is not None else None
 
         # Identity fields (NO filenames/paths in output/print)
