@@ -190,10 +190,17 @@ def summarize_signal_quality(per_file_df: pd.DataFrame) -> pd.DataFrame:
             q3 = float(vals_clean.quantile(0.75)) if len(vals_clean) >= 4 else np.nan
             iqr = (q3 - q1) if (q3 == q3 and q1 == q1) else np.nan
             mean_abs_slope = float(d1_abs.mean()) if not d1_abs.empty else np.nan
+            std_abs_slope = float(d1_abs.std(ddof=1)) if len(d1_abs) > 1 else np.nan
             mean_abs_curve = float(d2_abs.mean()) if not d2_abs.empty else np.nan
+            std_abs_curve = float(d2_abs.std(ddof=1)) if len(d2_abs) > 1 else np.nan
             mean_noise     = float(noi_clean.mean()) if not noi_clean.empty else np.nan
             mean_abs_rho   = float(rho_abs.mean()) if not rho_abs.empty else np.nan
             snr_slope      = float(mean_abs_slope / mean_noise) if (mean_noise and np.isfinite(mean_noise) and mean_noise != 0) else np.nan
+
+            # Normalized std columns
+            norm_std_val = float(std_val / abs(mean_val)) if (std_val == std_val and mean_val not in [0, np.nan]) else np.nan
+            norm_std_abs_slope = float(std_abs_slope / mean_abs_slope) if (std_abs_slope == std_abs_slope and mean_abs_slope not in [0, np.nan]) else np.nan
+            norm_std_abs_curve = float(std_abs_curve / mean_abs_curve) if (std_abs_curve == std_abs_curve and mean_abs_curve not in [0, np.nan]) else np.nan
 
             records.append({
                 "scope": scope,
@@ -202,10 +209,15 @@ def summarize_signal_quality(per_file_df: pd.DataFrame) -> pd.DataFrame:
                 "N": N,
                 "mean_value_at_low": mean_val,
                 "std_value_at_low": std_val,
+                "norm_std_value_at_low": norm_std_val,
                 "CV_value_at_low": cv_val,
                 "IQR_value_at_low": iqr,
                 "mean_abs_slope_at_low": mean_abs_slope,
+                "std_abs_slope_at_low": std_abs_slope,
+                "norm_std_abs_slope_at_low": norm_std_abs_slope,
                 "mean_abs_curvature_at_low": mean_abs_curve,
+                "std_abs_curvature_at_low": std_abs_curve,
+                "norm_std_abs_curvature_at_low": norm_std_abs_curve,
                 "mean_noise_std": mean_noise,
                 "mean_abs_spearman": mean_abs_rho,
                 "SNR_slope": snr_slope,
