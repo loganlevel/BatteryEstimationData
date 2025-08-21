@@ -37,11 +37,11 @@ def main():
     relax_dur = extract("relaxDurationSeconds")
     bolt_checks = extract("boltChecks")
 
-    try:
-        build_dt = datetime.strptime(build_time_str, "%b %d %Y %H:%M:%S")
-        date_str = build_dt.strftime("%Y%m%d")
-    except ValueError:
-        date_str = datetime.now().strftime("%Y%m%d")
+
+    build_dt = datetime.strptime(build_time_str, "%b %d %Y %H:%M:%S")
+    build_dt = build_dt.strftime("%Y%m%d")
+
+    date_str = datetime.now().strftime("%Y%m%d")
 
     # Extract CSV data
     csv_match = re.search(r"(timestamp,.*?)\n([\s\S]+)", raw_input)
@@ -68,7 +68,7 @@ def main():
     df["fault_sound_brownout"] = (df["faults"] & (1 << 3)) > 0
     df["fault_bolt_brownout"] = (df["faults"] & (1 << 4)) > 0
 
-    filename = f"{product_name}_{hw_rev}_{dut_id}_{date_str}_droop{droop_volume}_load{load_volume}_loaddur{load_dur}_relaxdur{relax_dur}_boltchecks{bolt_checks}"
+    filename = f"{product_name}_{hw_rev}_{dut_id}_{build_dt}-{date_str}_droop{droop_volume}_load{load_volume}_loaddur{load_dur}_relaxdur{relax_dur}_boltchecks{bolt_checks}"
 
     # Save processed CSV
     os.makedirs("csvs", exist_ok=True)
