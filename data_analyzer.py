@@ -3,19 +3,15 @@ import os
 import glob
 import pandas as pd
 import numpy as np
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
+from scipy.stats import spearmanr
 
-# === CONFIG ===
-CSV_DIR = "csvs/all-data-high-st"
-TIME_COL = "Time Elapsed (hours)"
-TEMP_COL = "temp"
-# If your plotting script trims to 160 rows, keep parity here:
-ROW_LIMIT = 160
-
-# Any column ending with "_mV" will be treated as a voltage-like series
+# ========== CONFIG ==========
+CSV_DIR   = "csvs/all-data-high-st"
+TIME_COL  = "Time Elapsed (hours)"
+TEMP_COL  = "temp"
+ROW_LIMIT = 160                 # match your plotting script window
 MV_SUFFIX = "_mV"
-
-# Fault columns (same set used in your plotting script)
 FAULT_COLS = [
     "fault_brownout",
     "fault_sound",
@@ -23,8 +19,11 @@ FAULT_COLS = [
     "fault_bolt",
     "fault_bolt_brownout",
 ]
+NOISE_WINDOW = 3                # +/- samples for noise std at low-batt
+OUT_PER_FILE = "low_batt_per_file.csv"
+OUT_SUMMARY  = "signal_quality_summary.csv"
 
-OUT_CSV = "low_battery_summary.csv"
+# ========== HELPERS ==========
 
 def list_csvs(root: str) -> List[str]:
     csvs = []
@@ -32,13 +31,18 @@ def list_csvs(root: str) -> List[str]:
         csvs.extend(sorted(glob.glob(os.path.join(root, sub, "*.csv"))))
     return csvs
 
+def device_name_from_basename(basename: str) -> str:
+    """
+    Your plotting script built legend labels from basename.split('_')[2].
+    We'll mirror that to get the device name like 'BE-1'.
+    """
+    base = basename.replace(".csv", "")
+    parts = base.split("_")
+    return parts[2] if len(parts) > 2 else base
+
 def find_low_battery_index(df: pd.DataFrame) -> Optional[int]:
-    """Replicates your logic: find first fault (ignoring first 10% rows),
-    then go to time that's 10% BEFORE that, and choose nearest row index."""
-    # restrict rows (to mirror plotting)
     if ROW_LIMIT is not None and len(df) > ROW_LIMIT:
         df = df.iloc[:ROW_LIMIT]
-
     if TIME_COL not in df.columns:
         return None
 
@@ -50,25 +54,20 @@ def find_low_battery_index(df: pd.DataFrame) -> Optional[int]:
     if not any_fault.any():
         return None
 
-    # Ignore first 10% rows (like your plotting script)
     n_rows = len(df)
-    min_idx = int(np.ceil(0.10 * n_rows))
+    min_idx = int(np.ceil(0.10 * n_rows))  # ignore first 10% rows
     any_fault.iloc[:min_idx] = False
-
     if not any_fault.any():
         return None
 
     idx_first_fault = any_fault.idxmax()
-
     t = df[TIME_COL]
     t0 = t.iloc[0]
     t_fault = t.loc[idx_first_fault]
     hours_to_fault = float(t_fault - t0)
 
-    # Target time is 10% before the fault time
+    # target is 10% BEFORE the fault time
     t_target = t_fault - 0.10 * hours_to_fault
-
-    # Find nearest time index
     idx_low = (t - t_target).abs().idxmin()
     return idx_low
 
@@ -80,66 +79,161 @@ def mode_temperature(df: pd.DataFrame) -> Optional[float]:
         return None
     return float(m.iloc[0])
 
-def numeric_derivatives_at_index(df: pd.DataFrame, idx: int, value_cols: List[str]) -> Dict[str, Dict[str, float]]:
+def safe_pos_index(df: pd.DataFrame, label_idx) -> int:
+    loc = df.index.get_loc(label_idx)
+    if isinstance(loc, slice):
+        return loc.start
+    return int(loc)
+
+def derivatives_and_noise(df: pd.DataFrame, idx_label, col: str) -> Tuple[float, float, float, float]:
     """
-    Compute value, first derivative (dV/dt), and second derivative (d2V/dt2)
-    at 'idx' for each column in value_cols.
-    Uses numpy.gradient with respect to TIME_COL.
+    Returns: (value, d1, d2, noise_std) at idx for column 'col'.
+    - d1 = dV/dt, d2 = d2V/dt2 (non-uniform dt via numpy.gradient)
+    - noise_std computed in a +/- NOISE_WINDOW neighborhood around idx (on original values).
     """
-    # Slice to ROW_LIMIT for parity
     if ROW_LIMIT is not None and len(df) > ROW_LIMIT:
         df = df.iloc[:ROW_LIMIT]
+    if TIME_COL not in df.columns or col not in df.columns:
+        return (np.nan, np.nan, np.nan, np.nan)
 
-    # Ensure numeric and monotonic time (if there is jitter, it still works as gradient uses spacing)
-    if TIME_COL not in df.columns:
-        return {}
     t = pd.to_numeric(df[TIME_COL], errors="coerce").to_numpy()
-
-    # If time has NaNs or is too short, bail gracefully
+    y = pd.to_numeric(df[col], errors="coerce").to_numpy()
     if np.isnan(t).any() or len(t) < 3:
-        return {col: {"value": np.nan, "d1": np.nan, "d2": np.nan} for col in value_cols}
+        return (np.nan, np.nan, np.nan, np.nan)
 
-    results: Dict[str, Dict[str, float]] = {}
+    # interpolate for derivatives (keep original for value/noise)
+    y_fill = pd.Series(y).interpolate(limit_direction="both").bfill().ffill().to_numpy()
+    try:
+        d1 = np.gradient(y_fill, t)
+        d2 = np.gradient(d1, t)
+    except Exception:
+        return (np.nan, np.nan, np.nan, np.nan)
 
-    # Build a fast lookup from label index to positional index
-    # (since idx could be a label, not positional)
-    pos_idx = df.index.get_loc(idx) if not isinstance(df.index.get_loc(idx), slice) else df.index.get_loc(idx).start
+    pos = safe_pos_index(df, idx_label)
+    v = y[pos] if pos < len(y) else np.nan
 
-    for col in value_cols:
-        if col not in df.columns:
-            results[col] = {"value": np.nan, "d1": np.nan, "d2": np.nan}
-            continue
+    # noise around idx using original (non-interpolated) values
+    lo = max(0, pos - NOISE_WINDOW)
+    hi = min(len(y), pos + NOISE_WINDOW + 1)
+    noise = np.nanstd(y[lo:hi]) if hi > lo else np.nan
 
-        y = pd.to_numeric(df[col], errors="coerce").to_numpy()
+    return (float(v) if v == v else np.nan,
+            float(d1[pos]) if np.isfinite(d1[pos]) else np.nan,
+            float(d2[pos]) if np.isfinite(d2[pos]) else np.nan,
+            float(noise) if np.isfinite(noise) else np.nan)
 
-        # Optionally, fill NaNs to make derivatives stable; keep original for 'value'
-        y_filled = pd.Series(y).interpolate(limit_direction="both").bfill().ffill().to_numpy()
+def pre_low_batt_monotonicity(df: pd.DataFrame, idx_label, col: str) -> float:
+    """
+    Spearman ρ between time and column from start up to (and including) low-batt index.
+    High |ρ| => more monotonic (|ρ| near 1). Returns np.nan if insufficient data.
+    """
+    if ROW_LIMIT is not None and len(df) > ROW_LIMIT:
+        df = df.iloc[:ROW_LIMIT]
+    if TIME_COL not in df.columns or col not in df.columns:
+        return np.nan
+    pos = safe_pos_index(df, idx_label)
+    if pos < 3:
+        return np.nan
+    t = pd.to_numeric(df[TIME_COL].iloc[:pos+1], errors="coerce")
+    y = pd.to_numeric(df[col].iloc[:pos+1], errors="coerce")
+    if t.isna().any() or y.isna().all():
+        return np.nan
+    try:
+        rho, _ = spearmanr(t, y, nan_policy="omit")
+        return float(rho) if np.isfinite(rho) else np.nan
+    except Exception:
+        return np.nan
 
-        # First derivative dV/dt and second derivative d2V/dt2 with nonuniform spacing
-        try:
-            d1 = np.gradient(y_filled, t)
-            d2 = np.gradient(d1, t)
-            val = y[pos_idx]  # original (could be NaN if missing)
-            results[col] = {
-                "value": float(val) if val == val else np.nan,
-                "d1": float(d1[pos_idx]),
-                "d2": float(d2[pos_idx]),
-            }
-        except Exception:
-            results[col] = {"value": np.nan, "d1": np.nan, "d2": np.nan}
+def summarize_signal_quality(per_file_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    For each *_mV column, compute signal-quality stats:
+      - N (count of valid rows)
+      - mean_value_at_low, std_value_at_low, CV_value_at_low
+      - IQR_value_at_low (Q3 - Q1)
+      - mean_abs_slope_at_low (|d1|)
+      - mean_abs_curvature_at_low (|d2|)
+      - mean_noise_std
+      - mean_abs_spearman (monotonicity)
+      - SNR_slope := mean_abs_slope_at_low / mean_noise_std
+    Done both overall and per temperature group (rounded mode temp).
+    Returns a tall DF with index [scope, temp_group, column].
+    """
+    records = []
 
-    return results
+    # Gather mv columns from the per-file DF
+    mv_cols = sorted({c.split("__")[0] for c in per_file_df.columns
+                      if c.endswith("__value") and c.endswith("_mV__value")})
+    if not mv_cols:
+        # fall back to scanning columns for *_mV__value
+        mv_cols = sorted([c[:-len("__value")] for c in per_file_df.columns
+                          if c.endswith("_mV__value")])
+
+    def calc_block(df_block: pd.DataFrame, scope: str, temp_group: Optional[int]):
+        for col in mv_cols:
+            vals = df_block[f"{col}__value"]
+            d1   = df_block[f"{col}__d1_per_hour"]
+            d2   = df_block[f"{col}__d2_per_hour2"]
+            noi  = df_block[f"{col}__noise_std"]
+            rho  = df_block[f"{col}__spearman_pre_low"]
+
+            vals_clean = vals.replace([np.inf, -np.inf], np.nan).dropna()
+            d1_abs = d1.abs().replace([np.inf, -np.inf], np.nan).dropna()
+            d2_abs = d2.abs().replace([np.inf, -np.inf], np.nan).dropna()
+            noi_clean = noi.replace([np.inf, -np.inf], np.nan).dropna()
+            rho_abs = rho.abs().replace([np.inf, -np.inf], np.nan).dropna()
+
+            N = int(min(len(vals_clean), len(d1_abs), len(noi_clean)))  # conservative
+            mean_val = float(vals_clean.mean()) if not vals_clean.empty else np.nan
+            std_val  = float(vals_clean.std(ddof=1)) if len(vals_clean) > 1 else np.nan
+            cv_val   = float(std_val / abs(mean_val)) if (std_val == std_val and mean_val not in [0, np.nan]) else np.nan
+            q1 = float(vals_clean.quantile(0.25)) if len(vals_clean) >= 4 else np.nan
+            q3 = float(vals_clean.quantile(0.75)) if len(vals_clean) >= 4 else np.nan
+            iqr = (q3 - q1) if (q3 == q3 and q1 == q1) else np.nan
+            mean_abs_slope = float(d1_abs.mean()) if not d1_abs.empty else np.nan
+            mean_abs_curve = float(d2_abs.mean()) if not d2_abs.empty else np.nan
+            mean_noise     = float(noi_clean.mean()) if not noi_clean.empty else np.nan
+            mean_abs_rho   = float(rho_abs.mean()) if not rho_abs.empty else np.nan
+            snr_slope      = float(mean_abs_slope / mean_noise) if (mean_noise and np.isfinite(mean_noise) and mean_noise != 0) else np.nan
+
+            records.append({
+                "scope": scope,
+                "temp_group_C": temp_group,
+                "column": col,
+                "N": N,
+                "mean_value_at_low": mean_val,
+                "std_value_at_low": std_val,
+                "CV_value_at_low": cv_val,
+                "IQR_value_at_low": iqr,
+                "mean_abs_slope_at_low": mean_abs_slope,
+                "mean_abs_curvature_at_low": mean_abs_curve,
+                "mean_noise_std": mean_noise,
+                "mean_abs_spearman": mean_abs_rho,
+                "SNR_slope": snr_slope,
+            })
+
+    # Overall
+    calc_block(per_file_df, scope="overall", temp_group=None)
+
+    # Per temperature group (rounded mode temp)
+    if "temp_mode_C" in per_file_df.columns:
+        per_file_df = per_file_df.copy()
+        per_file_df["temp_group_C"] = per_file_df["temp_mode_C"].round().astype("Int64")
+        for tg, group in per_file_df.groupby("temp_group_C", dropna=True):
+            calc_block(group, scope="per_temp", temp_group=int(tg))
+
+    return pd.DataFrame.from_records(records)
+
+# ========== MAIN PIPELINE ==========
 
 def main():
-    csv_paths = list_csvs(CSV_DIR)
-    if not csv_paths:
+    paths = list_csvs(CSV_DIR)
+    if not paths:
         print(f"No CSVs found under {CSV_DIR}")
         return
 
-    rows = []
-    printed_header = False
+    per_file_rows = []
 
-    for path in csv_paths:
+    for path in paths:
         try:
             df = pd.read_csv(path)
         except Exception:
@@ -148,65 +242,83 @@ def main():
         if ROW_LIMIT is not None and len(df) > ROW_LIMIT:
             df = df.iloc[:ROW_LIMIT]
 
+        # Skip if required columns are missing
+        if TIME_COL not in df.columns:
+            continue
+
         idx_low = find_low_battery_index(df)
         if idx_low is None:
             continue
 
-        # Gather all *_mV columns present (treat as voltage-like)
+        # Gather columns to evaluate
         mv_cols = [c for c in df.columns if c.endswith(MV_SUFFIX)]
+        if not mv_cols:
+            continue
 
-        # Compute derivatives at low-batt index
-        derivs = numeric_derivatives_at_index(df, idx_low, mv_cols)
-
-        # Mode temperature
+        # Mode temperature (reference & grouping)
         temp_mode = mode_temperature(df)
+        temp_mode_rounded = int(round(temp_mode)) if temp_mode is not None else None
 
-        # Build a flat record: subfolder, idx, time, temp_mode, then per-col triples
+        # Identity fields (NO filenames/paths in output/print)
         subfolder = os.path.basename(os.path.dirname(path))
-        t_low = df.loc[idx_low, TIME_COL] if TIME_COL in df.columns else np.nan
+        device = device_name_from_basename(os.path.basename(path))
 
-        record = {
+        # Base record (one row per CSV, with many per-column stats)
+        rec = {
             "subfolder": subfolder,
-            "file": os.path.basename(path),
-            "low_batt_idx": idx_low,
-            "time_at_low_batt_hours": float(t_low) if t_low == t_low else np.nan,
+            "device": device,
             "temp_mode_C": temp_mode,
+            "temp_group_C": temp_mode_rounded,
         }
 
-        # Flatten voltage stats
+        # Time at low-battery
+        t_low = df.loc[idx_low, TIME_COL]
+        rec["time_at_low_batt_hours"] = float(t_low) if t_low == t_low else np.nan
+
+        # Per-column point metrics
         for col in mv_cols:
-            stats = derivs.get(col, {"value": np.nan, "d1": np.nan, "d2": np.nan})
-            record[f"{col}__value"] = stats["value"]
-            record[f"{col}__d1_per_hour"] = stats["d1"]
-            record[f"{col}__d2_per_hour2"] = stats["d2"]
+            v, d1, d2, noise = derivatives_and_noise(df, idx_low, col)
+            rho = pre_low_batt_monotonicity(df, idx_low, col)
 
-        rows.append(record)
+            rec[f"{col}__value"] = v
+            rec[f"{col}__d1_per_hour"] = d1
+            rec[f"{col}__d2_per_hour2"] = d2
+            rec[f"{col}__noise_std"] = noise
+            rec[f"{col}__spearman_pre_low"] = rho
 
-        # Pretty print a concise line for quick inspection
-        if not printed_header:
-            print("subfolder | file | t(h) | temp_mode(C) | " +
-                  " | ".join(f"{c} [V,dV/dt,d2V/dt2]" for c in mv_cols))
-            printed_header = True
+        per_file_rows.append(rec)
 
-        triple_strs = []
-        for c in mv_cols:
-            v = record.get(f"{c}__value", np.nan)
-            d1 = record.get(f"{c}__d1_per_hour", np.nan)
-            d2 = record.get(f"{c}__d2_per_hour2", np.nan)
-            triple_strs.append(f"{c}=({v:.3f},{d1:.3f},{d2:.3f})" if all(np.isfinite([v,d1,d2])) else f"{c}=(nan,nan,nan)")
-
-        print(f"{subfolder} | {os.path.basename(path)} | "
-              f"{record['time_at_low_batt_hours']:.3f} | "
-              f"{'%.2f'%temp_mode if temp_mode is not None else 'nan'} | "
-              + " | ".join(triple_strs))
-
-    if not rows:
-        print("No rows to save. Exiting.")
+    if not per_file_rows:
+        print("No usable rows (no low-battery indices found).")
         return
 
-    out_df = pd.DataFrame(rows)
-    out_df.to_csv(OUT_CSV, index=False)
-    print(f"\nSaved {len(out_df)} rows to {OUT_CSV}")
+    per_file_df = pd.DataFrame(per_file_rows)
+
+    # ---- Print concise overall/per-temp summaries (no filenames/paths) ----
+    summary_df = summarize_signal_quality(per_file_df)
+
+    # Pretty print: overall first, then per-temp
+    pd.set_option("display.max_rows", None)
+    pd.set_option("display.width", 140)
+
+    print("\n=== OVERALL SIGNAL QUALITY (per voltage column) ===")
+    overall = summary_df[summary_df["scope"] == "overall"].drop(columns=["scope", "temp_group_C"])
+    print(overall.sort_values(["SNR_slope", "mean_abs_spearman"], ascending=[False, False]).to_string(index=False))
+
+    print("\n=== PER-TEMPERATURE SIGNAL QUALITY (per voltage column) ===")
+    per_temp = summary_df[summary_df["scope"] == "per_temp"].drop(columns=["scope"])
+    # sort by temp group then SNR
+    per_temp = per_temp.sort_values(["temp_group_C", "SNR_slope", "mean_abs_spearman"], ascending=[True, False, False])
+    print(per_temp.to_string(index=False))
+
+    # ---- Save CSVs (no filenames/paths in the per-file rows) ----
+    # Keep only subfolder/device identities (no path), plus metrics
+    per_file_df.to_csv(OUT_PER_FILE, index=False)
+    summary_df.to_csv(OUT_SUMMARY, index=False)
+
+    # Minimal confirmation
+    print(f"\nWrote per-file metrics to {OUT_PER_FILE}")
+    print(f"Wrote signal-quality summaries to {OUT_SUMMARY}")
 
 if __name__ == "__main__":
     main()
