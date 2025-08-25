@@ -6,7 +6,7 @@ import numpy as np  # NEW
 from matplotlib.lines import Line2D
 
 # CONFIGURATION
-CSV_DIR = "csvs/cross_temp/temp-20"
+CSV_DIR = "csvs/cross_man/temp-m10"
 CSV_TAG = os.path.basename(os.path.normpath(CSV_DIR))
 PLOT_OUTPUT = f"plots/compare_all_{CSV_DIR.replace("/", "-")}.png"
 
