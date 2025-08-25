@@ -1,16 +1,16 @@
 import os
 
 dut_names_dict = {
-    "0xb014cb8c55f6928a": "BE-T",
     "0xf820357251287ce1": "BE-1",
     "0x07540ba7e21004bf": "BE-2",
     "0x679f80f90cea91dd": "BE-3",
     "0x77db265172dec07f": "BE-4",
-    "0x9e9556434662d576": "BE-5",
+    "0xd0213d8230e21d84": "BE-5",
     "0x862b09ac4bbb4604": "BE-6",
     "0xb14c93f83f6fa826": "BE-7",
     "0x9c15f93d401b4598": "BE-8",
-    "": "BE-9",
+    "0x9c15f93d401b4598": "BE-8",
+    "0x5c84a4c09ecf87d8": "BE-9",
 }
 
 for root, dirs, files in os.walk('.'):
