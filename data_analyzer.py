@@ -7,7 +7,7 @@ from typing import Optional, List, Dict, Tuple
 from scipy.stats import spearmanr
 
 # ========== CONFIG ==========
-CSV_DIR   = "csvs/cross_temp"
+CSV_DIR   = "csvs/level-li-cross-temp"
 TIME_COL  = "Time Elapsed (hours)"
 TEMP_COL  = "temp"
 ROW_LIMIT = None                 # match your plotting script window
@@ -222,8 +222,8 @@ def summarize_signal_quality(per_file_df: pd.DataFrame) -> pd.DataFrame:
                 "mean_value_at_low": mean_val,
                 "std_value_at_low": std_val,
                 "norm_std_value_at_low": norm_std_val,
-                "CV_value_at_low": cv_val,
-                "IQR_value_at_low": iqr,
+                # "CV_value_at_low": cv_val,
+                # "IQR_value_at_low": iqr,
                 "mean_abs_slope_at_low": mean_abs_slope,
                 "std_abs_slope_at_low": std_abs_slope,
                 "norm_std_abs_slope_at_low": norm_std_abs_slope,

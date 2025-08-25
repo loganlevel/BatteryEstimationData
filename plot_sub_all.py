@@ -6,7 +6,7 @@ import numpy as np
 from matplotlib.lines import Line2D
 
 # CONFIGURATION
-CSV_DIR = "csvs/all-data-cross-temp"
+CSV_DIR = "csvs/all-cross-temp/temp-m10c"
 CSV_TAG = os.path.basename(os.path.normpath(CSV_DIR))
 PLOT_OUTPUT = f"plots/compare_all_{CSV_DIR.replace("/","-")}.png"
 COMPUTE_LOW_BATT_BY_ALL_FAULTS=False
@@ -78,7 +78,7 @@ for sf in subfolders:
 
     for csv_path in csv_files:
         df = pd.read_csv(csv_path)
-        df = df.iloc[:160]
+        df = df.iloc[:120]
 
         if "Time Elapsed (hours)" not in df.columns:
             print(f"    Skipping {csv_path} (missing time column)")
