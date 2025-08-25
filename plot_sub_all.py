@@ -6,9 +6,10 @@ import numpy as np
 from matplotlib.lines import Line2D
 
 # CONFIGURATION
-CSV_DIR = "csvs/all-data-high-st"
+CSV_DIR = "csvs/all-data"
 CSV_TAG = os.path.basename(os.path.normpath(CSV_DIR))
 PLOT_OUTPUT = f"plots/compare_all_{CSV_DIR.replace("/","-")}.png"
+COMPUTE_LOW_BATT_BY_ALL_FAULTS=False
 
 COLUMNS_TO_PLOT = [
     ("temp", "Temperature", "°C"),
@@ -94,11 +95,15 @@ for sf in subfolders:
                 fault_present[k] = True
 
         # Compute 10% pre-first-fault "low battery" index (per-file)
-        fault_cols = [c for c in fault_present.keys() if c in df.columns]
+        if COMPUTE_LOW_BATT_BY_ALL_FAULTS:
+            fault_cols = [c for c in ["fault_brownout", "fault_sound", "fault_sound_brownout", "fault_bolt", "fault_bolt_brownout"] if c in df.columns]
+        else:
+            fault_cols = [c for c in ["fault_bolt", "fault_bolt_brownout"] if c in df.columns]
         idx_low_batt = None
         if fault_cols:
             any_fault = df[fault_cols].any(axis=1)
             if any_fault.any():
+                # Ignore faults in the first 10% of the data
                 n_rows = len(df)
                 min_idx = int(np.ceil(0.10 * n_rows))
                 any_fault.iloc[:min_idx] = False

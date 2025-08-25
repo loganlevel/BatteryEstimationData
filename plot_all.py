@@ -9,6 +9,7 @@ from matplotlib.lines import Line2D
 CSV_DIR = "csvs/cross_man/temp-m10"
 CSV_TAG = os.path.basename(os.path.normpath(CSV_DIR))
 PLOT_OUTPUT = f"plots/compare_all_{CSV_DIR.replace("/", "-")}.png"
+COMPUTE_LOW_BATT_BY_ALL_FAULTS=False
 
 COLUMNS_TO_PLOT = [
     ("temp", "Temperature", "°C"),
@@ -64,7 +65,10 @@ for csv_path in csv_files:
             fault_present[k] = True
 
     # Compute 10% pre-first-fault "low battery" index (per-file)
-    fault_cols = [c for c in fault_present.keys() if c in df.columns]
+    if COMPUTE_LOW_BATT_BY_ALL_FAULTS:
+        fault_cols = [c for c in ["fault_brownout", "fault_sound", "fault_sound_brownout", "fault_bolt", "fault_bolt_brownout"] if c in df.columns]
+    else:
+        fault_cols = [c for c in ["fault_bolt", "fault_bolt_brownout"] if c in df.columns]
     idx_low_batt = None
     if fault_cols:
         any_fault = df[fault_cols].any(axis=1)
@@ -77,6 +81,9 @@ for csv_path in csv_files:
                 idx_first_fault = any_fault.idxmax()
                 t0 = t_series.iloc[0]
                 t_fault = t_series.loc[idx_first_fault]
+                hours_to_fault = t_fault - t0
+                t_target = t_fault - 0.10 * hours_to_fault
+                idx_low_batt = (t_series - t_target).abs().idxmin()
                 hours_to_fault = t_fault - t0
                 t_target = t_fault - 0.10 * hours_to_fault
                 idx_low_batt = (t_series - t_target).abs().idxmin()
