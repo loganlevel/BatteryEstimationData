@@ -7,7 +7,7 @@ from typing import Optional, List, Dict, Tuple
 from scipy.stats import spearmanr
 
 # ========== CONFIG ==========
-CSV_DIR   = "csvs/level-li-cross-temp"
+CSV_DIR   = "csvs/manufacturers-cross-temp"
 TIME_COL  = "Time Elapsed (hours)"
 TEMP_COL  = "temp"
 ROW_LIMIT = None                 # match your plotting script window
@@ -27,8 +27,8 @@ OUT_SUMMARY  = f"{CSV_DIR}/signal_quality_summary.csv"
 
 def list_csvs(root: str) -> List[str]:
     csvs = []
-    for sub in sorted(d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d))):
-        csvs.extend(sorted(glob.glob(os.path.join(root, sub, "*.csv"))))
+    for dirpath, _, _ in os.walk(root):
+        csvs.extend(sorted(glob.glob(os.path.join(dirpath, "*.csv"))))
     return csvs
 
 def device_name_from_basename(basename: str) -> str:
@@ -71,9 +71,13 @@ def find_low_battery_index(df: pd.DataFrame) -> Optional[int]:
     idx_low = (t - t_target).abs().idxmin()
     return idx_low
 
-def mode_temperature_across_subfolder(csv_paths: List[str]) -> Optional[float]:
+def csvs_under_dir(root: str) -> List[str]:
+    """Return all CSV paths under root (recursive)."""
+    return sorted(glob.glob(os.path.join(root, "**", "*.csv"), recursive=True))
+
+def mode_temperature_over_paths(csv_paths: List[str]) -> Optional[float]:
     """
-    Computes the mode temperature across all rows in all CSVs in a subfolder.
+    Computes the mode temperature across all rows in all CSVs provided.
     Returns the most common temperature value (float) or None if not found.
     """
     temps = []
@@ -90,6 +94,23 @@ def mode_temperature_across_subfolder(csv_paths: List[str]) -> Optional[float]:
     if len(m) == 0:
         return None
     return float(m.iloc[0])
+
+def find_temp_folder(start_path: str) -> Optional[str]:
+    """
+    Walk up from start_path until a directory whose basename starts with 'temp-'
+    is found. Return that directory path or None.
+    """
+    cur = os.path.abspath(os.path.dirname(start_path))
+    # guard against escaping the CSV_DIR root
+    csv_dir_abs = os.path.abspath(CSV_DIR)
+    while True:
+        base = os.path.basename(cur)
+        if base.startswith("temp-"):
+            return cur
+        parent = os.path.dirname(cur)
+        if cur == parent or not cur.startswith(csv_dir_abs):
+            return None
+        cur = parent
 
 def safe_pos_index(df: pd.DataFrame, label_idx) -> int:
     loc = df.index.get_loc(label_idx)
@@ -158,16 +179,7 @@ def pre_low_batt_monotonicity(df: pd.DataFrame, idx_label, col: str) -> float:
 
 def summarize_signal_quality(per_file_df: pd.DataFrame) -> pd.DataFrame:
     """
-    For each *_mV column, compute signal-quality stats:
-      - N (count of valid rows)
-      - mean_value_at_low, std_value_at_low, CV_value_at_low
-      - IQR_value_at_low (Q3 - Q1)
-      - mean_abs_slope_at_low (|d1|)
-      - mean_abs_curvature_at_low (|d2|)
-      - mean_noise_std
-      - mean_abs_spearman (monotonicity)
-      - SNR_slope := mean_abs_slope_at_low / mean_noise_std
-    Done both overall and per temperature group (rounded mode temp).
+    For each *_mV column, compute signal-quality stats (overall and per temp group).
     Returns a tall DF with index [scope, temp_group, column].
     """
     records = []
@@ -176,7 +188,6 @@ def summarize_signal_quality(per_file_df: pd.DataFrame) -> pd.DataFrame:
     mv_cols = sorted({c.split("__")[0] for c in per_file_df.columns
                       if c.endswith("__value") and c.endswith("_mV__value")})
     if not mv_cols:
-        # fall back to scanning columns for *_mV__value
         mv_cols = sorted([c[:-len("__value")] for c in per_file_df.columns
                           if c.endswith("_mV__value")])
 
@@ -197,22 +208,16 @@ def summarize_signal_quality(per_file_df: pd.DataFrame) -> pd.DataFrame:
             N = int(min(len(vals_clean), len(d1_abs), len(noi_clean)))  # conservative
             mean_val = float(vals_clean.mean()) if not vals_clean.empty else np.nan
             std_val  = float(vals_clean.std(ddof=1)) if len(vals_clean) > 1 else np.nan
-            cv_val   = float(std_val / abs(mean_val)) if (std_val == std_val and mean_val not in [0, np.nan]) else np.nan
-            q1 = float(vals_clean.quantile(0.25)) if len(vals_clean) >= 4 else np.nan
-            q3 = float(vals_clean.quantile(0.75)) if len(vals_clean) >= 4 else np.nan
-            iqr = (q3 - q1) if (q3 == q3 and q1 == q1) else np.nan
+            norm_std_val = float(std_val / abs(mean_val)) if (std_val == std_val and mean_val not in [0, np.nan]) else np.nan
             mean_abs_slope = float(d1_abs.mean()) if not d1_abs.empty else np.nan
             std_abs_slope = float(d1_abs.std(ddof=1)) if len(d1_abs) > 1 else np.nan
+            norm_std_abs_slope = float(std_abs_slope / mean_abs_slope) if (std_abs_slope == std_abs_slope and mean_abs_slope not in [0, np.nan]) else np.nan
             mean_abs_curve = float(d2_abs.mean()) if not d2_abs.empty else np.nan
             std_abs_curve = float(d2_abs.std(ddof=1)) if len(d2_abs) > 1 else np.nan
+            norm_std_abs_curve = float(std_abs_curve / mean_abs_curve) if (std_abs_curve == std_abs_curve and mean_abs_curve not in [0, np.nan]) else np.nan
             mean_noise     = float(noi_clean.mean()) if not noi_clean.empty else np.nan
             mean_abs_rho   = float(rho_abs.mean()) if not rho_abs.empty else np.nan
             snr_slope      = float(mean_abs_slope / mean_noise) if (mean_noise and np.isfinite(mean_noise) and mean_noise != 0) else np.nan
-
-            # Normalized std columns
-            norm_std_val = float(std_val / abs(mean_val)) if (std_val == std_val and mean_val not in [0, np.nan]) else np.nan
-            norm_std_abs_slope = float(std_abs_slope / mean_abs_slope) if (std_abs_slope == std_abs_slope and mean_abs_slope not in [0, np.nan]) else np.nan
-            norm_std_abs_curve = float(std_abs_curve / mean_abs_curve) if (std_abs_curve == std_abs_curve and mean_abs_curve not in [0, np.nan]) else np.nan
 
             records.append({
                 "scope": scope,
@@ -222,8 +227,6 @@ def summarize_signal_quality(per_file_df: pd.DataFrame) -> pd.DataFrame:
                 "mean_value_at_low": mean_val,
                 "std_value_at_low": std_val,
                 "norm_std_value_at_low": norm_std_val,
-                # "CV_value_at_low": cv_val,
-                # "IQR_value_at_low": iqr,
                 "mean_abs_slope_at_low": mean_abs_slope,
                 "std_abs_slope_at_low": std_abs_slope,
                 "norm_std_abs_slope_at_low": norm_std_abs_slope,
@@ -274,24 +277,32 @@ def main():
         if idx_low is None:
             continue
 
-        # Gather columns to evaluate
+        # Gather voltage columns to evaluate
         mv_cols = [c for c in df.columns if c.endswith(MV_SUFFIX)]
         if not mv_cols:
             continue
 
-        # Mode temperature (reference & grouping)
-        folder_path = os.path.dirname(path)
-        csvs_in_folder = sorted(glob.glob(os.path.join(folder_path, "*.csv")))
-        temp_mode = mode_temperature_across_subfolder(csvs_in_folder)
+        # ---------- Mode temperature based on the *temp-XX* folder ----------
+        temp_folder = find_temp_folder(path)
+        if temp_folder is not None:
+            csvs_for_temp_folder = csvs_under_dir(temp_folder)  # all manufacturers under this temp-XX
+            temp_mode = mode_temperature_over_paths(csvs_for_temp_folder)
+        else:
+            # Fallback: just this CSV's own TEMP column
+            try:
+                temp_mode = float(pd.to_numeric(df[TEMP_COL], errors="coerce").mode(dropna=True).iloc[0])
+            except Exception:
+                temp_mode = None
         temp_mode_rounded = int(round(temp_mode)) if temp_mode is not None else None
+        # -------------------------------------------------------------------
 
         # Identity fields (NO filenames/paths in output/print)
-        subfolder = os.path.basename(os.path.dirname(path))
+        manufacturer_subfolder = os.path.basename(os.path.dirname(path))  # e.g., 'duracell'
         device = device_name_from_basename(os.path.basename(path))
 
         # Base record (one row per CSV, with many per-column stats)
         rec = {
-            "subfolder": subfolder,
+            "subfolder": manufacturer_subfolder,
             "device": device,
             "temp_mode_C": temp_mode,
             "temp_group_C": temp_mode_rounded,
@@ -331,7 +342,8 @@ def main():
     overall = summary_df[summary_df["scope"] == "overall"].drop(columns=["scope", "temp_group_C"])
     print(overall.sort_values(["SNR_slope", "mean_abs_spearman"], ascending=[False, False]).to_string(index=False))
 
-    print("\n=== PER-TEMPERATURE SIGNAL QUALITY (per voltage column) ===")
+    print("\n=== PER-TEMPERATURE SIGNAL QUALITY (per voltage column)")
+
     per_temp = summary_df[summary_df["scope"] == "per_temp"].drop(columns=["scope"])
     # sort by temp group then SNR
     per_temp = per_temp.sort_values(["temp_group_C", "SNR_slope", "mean_abs_spearman"], ascending=[True, False, False])
