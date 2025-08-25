@@ -60,6 +60,13 @@ def main():
     df["Time Elapsed (hours)"] = (df["timestamp"] - start_ts) / 3600
     df["soundDroopMag_mV"] = df["batt_mV"] - df["soundDroop_mV"]
     df["boltDroopMag_mV"] = df["batt_mV"] - df["boltDroop_mV"]
+    # Make sure batteryLevel is an integer dtype
+    # df["batteryLevel"] = df["batteryLevel"].astype(int)
+
+    # Decode batteryLevel: lower 4 bits = meanLevel, upper 4 bits = nnLevel
+    df["meanLevel"] = df["batteryLevel"] & 0x0F
+    df["nnLevel"]   = (df["batteryLevel"] // 16) & 0x0F
+
 
     # Decode fault bitfields
     df["fault_brownout"] = (df["faults"] & (1 << 0)) > 0
