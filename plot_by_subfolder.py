@@ -6,10 +6,11 @@ import numpy as np
 from matplotlib.lines import Line2D
 
 # CONFIGURATION
-CSV_DIR = "csvs/all-cross-temp/temp-m10c"
+CSV_DIR = "csvs/manufacturers-cross-temp/temp-60c"
 CSV_TAG = os.path.basename(os.path.normpath(CSV_DIR))
 PLOT_OUTPUT = f"plots/compare_all_{CSV_DIR.replace("/","-")}.png"
-COMPUTE_LOW_BATT_BY_ALL_FAULTS=False
+COMPUTE_LOW_BATT_BY_ALL_FAULTS=True
+TIME_LIMIT_HOURS=80
 
 COLUMNS_TO_PLOT = [
     ("temp", "Temperature", "°C"),
@@ -61,7 +62,7 @@ def friendly_label(csv_path, folder_name):
     parts = base.split("_")
     label_core = parts[2] if len(parts) > 2 else base
     # Append folder name to legend label
-    return f"{label_core} [{folder_name}]"
+    return f"{folder_name}"
 
 total_csvs = 0
 
@@ -76,15 +77,18 @@ for sf in subfolders:
     total_csvs += len(csv_files)
     color = subfolder_color[sf]
 
+    # Only add one legend entry per subfolder (for the first CSV only)
+    legend_label_added = False
+
     for csv_path in csv_files:
         df = pd.read_csv(csv_path)
-        df = df.iloc[:120]
+        df = df.iloc[:(TIME_LIMIT_HOURS*2)]
 
         if "Time Elapsed (hours)" not in df.columns:
             print(f"    Skipping {csv_path} (missing time column)")
             continue
 
-        label = friendly_label(csv_path, sf)
+        label = friendly_label(csv_path, sf) if not legend_label_added else None
         t_series = df["Time Elapsed (hours)"]
         total_time = t_series.iloc[-1] - t_series.iloc[0]
         offset = total_time * 0.005
@@ -122,8 +126,9 @@ for sf in subfolders:
 
             # Plot series with the subfolder's color
             line, = ax.plot(t_series, df[col], label=label, color=color)
-            if i == 0:
+            if i == 0 and not legend_label_added:
                 series_handles_axis0.append(line)
+                legend_label_added = True
 
             # Fault markers — same offsets/order
             if "fault_brownout" in df.columns:

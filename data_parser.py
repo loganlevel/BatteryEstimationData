@@ -167,7 +167,6 @@ def main():
     if fault_mask.any():
         first_fault_idx = fault_mask.idxmax()
         duration_to_first_fault = df[time_col].iloc[first_fault_idx] - df[time_col].iloc[0]
-        print(f"Duration up to first fault: {round(duration_to_first_fault, 0)} hours")
     else:
         print("No faults detected in the test.")
 
