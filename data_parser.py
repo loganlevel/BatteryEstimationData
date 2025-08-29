@@ -17,6 +17,7 @@ dut_names_dict = {
     "0x9c15f93d401b4598": "BE-8",
     "0x9c15f93d401b4598": "BE-8",
     "0x5c84a4c09ecf87d8": "BE-9",
+    "0x178cddb9c4876c64": "BE-13",
     "0x839c39e2f387076a": "BE-14",
 }
 
@@ -154,6 +155,21 @@ def main():
     output_png = f"plots/{filename}_all_plots.png"
     plt.savefig(output_png)
     print(f"Saved all plots as: {output_png}")
+
+    # Print duration up to the first fault
+    fault_mask = (
+        df["fault_brownout"] |
+        df["fault_bolt"] |
+        df["fault_sound"] |
+        df["fault_sound_brownout"] |
+        df["fault_bolt_brownout"]
+    )
+    if fault_mask.any():
+        first_fault_idx = fault_mask.idxmax()
+        duration_to_first_fault = df[time_col].iloc[first_fault_idx] - df[time_col].iloc[0]
+        print(f"Duration up to first fault: {round(duration_to_first_fault, 0)} hours")
+    else:
+        print("No faults detected in the test.")
 
 if __name__ == "__main__":
     main()
