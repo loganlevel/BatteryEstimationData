@@ -81,7 +81,7 @@ def main():
 
     # Save processed CSV
     os.makedirs("csvs", exist_ok=True)
-    output_csv = f"csvs/parsed/{filename}.csv"
+    output_csv = f"plots/{filename}/{filename}.csv"
     df.to_csv(output_csv, index=False)
     print(f"Saved parsed CSV to: {output_csv}")
 
@@ -152,7 +152,7 @@ def main():
         ax.set_xlabel("Time Elapsed (hours)")
 
     plt.tight_layout()
-    output_png = f"plots/{filename}_all_plots.png"
+    output_png = f"plots/{filename}/{filename}_all_plots.png"
     plt.savefig(output_png)
     print(f"Saved all plots as: {output_png}")
 
