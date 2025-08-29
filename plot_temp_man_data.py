@@ -5,10 +5,10 @@ import glob
 import numpy as np
 from matplotlib.lines import Line2D
 
-CSV_DIR = "csvs/manufacturers-cross-temp/temp-60c"
+CSV_DIR = "csvs/manufacturers-cross-temp/"
 CSV_TAG = os.path.basename(os.path.normpath(CSV_DIR))
 PLOT_OUTPUT = f"plots/compare_all_{CSV_DIR.replace('/', '-')}.png"
-COMPUTE_LOW_BATT_BY_ALL_FAULTS = False
+COMPUTE_LOW_BATT_BY_ALL_FAULTS = True
 TIME_LIMIT_HOURS=80
 
 COLUMNS_TO_PLOT = [
@@ -41,6 +41,7 @@ axes = axes.flatten()
 
 dot_size = 20
 series_handles_axis0 = []
+folder_mode_temps = {}  # Store mode temp per folder
 
 fault_present = {
     "fault_brownout": False,
@@ -49,12 +50,6 @@ fault_present = {
     "fault_bolt": False,
     "fault_bolt_brownout": False,
 }
-
-def friendly_label(csv_path, manufacturer):
-    base = os.path.basename(csv_path).replace(".csv", "")
-    parts = base.split("_")
-    label_core = parts[2] if len(parts) > 2 else base
-    return f"{label_core} [{manufacturer}]"
 
 total_csvs = 0
 
@@ -69,6 +64,7 @@ for tf in temp_folders:
         continue
 
     color = temp_color[tf]
+    temps_in_folder = []
 
     for mfg in manufacturers:
         mfg_path = os.path.join(tf_path, mfg)
@@ -88,11 +84,15 @@ for tf in temp_folders:
                 print(f"    Skipping {csv_path} (missing time column)")
                 continue
 
-            label = friendly_label(csv_path, mfg)
+            # collect temperatures
+            if "temp" in df.columns:
+                temps_in_folder.extend(df["temp"].values.tolist())
+
             t_series = df["Time Elapsed (hours)"]
             total_time = t_series.iloc[-1] - t_series.iloc[0]
             offset = total_time * 0.005
 
+            # fault tracking
             for k in fault_present.keys():
                 if k in df.columns and df[k].any():
                     fault_present[k] = True
@@ -121,9 +121,7 @@ for tf in temp_folders:
                 if col not in df.columns:
                     continue
 
-                line, = ax.plot(t_series, df[col], label=label, color=color)
-                if i == 0:
-                    series_handles_axis0.append(line)
+                line, = ax.plot(t_series, df[col], color=color, label=None)  # suppress per-CSV labels
 
                 if "fault_brownout" in df.columns:
                     ax.scatter(t_series[df["fault_brownout"]] - offset,
@@ -166,11 +164,21 @@ for tf in temp_folders:
                 else:
                     ax.set_ylim(0, 3400)
 
+    # store mode temp for this folder
+    if temps_in_folder:
+        mode_temp = int(round(pd.Series(temps_in_folder).mode().iloc[0]))
+        folder_mode_temps[tf] = mode_temp
+        # create a dummy handle for legend
+        handle = Line2D([], [], color=color, label=f"Temp {mode_temp}C")
+        series_handles_axis0.append(handle)
+
 ax0 = axes[0]
 
-series_legend = ax0.legend(handles=series_handles_axis0, title="Series", loc="lower right")
+# Legend per folder
+series_legend = ax0.legend(handles=series_handles_axis0, title="Temperature Folders", loc="lower right")
 ax0.add_artist(series_legend)
 
+# Fault legend (unchanged)
 fault_handles = []
 if fault_present["fault_brownout"]:
     fault_handles.append(Line2D([], [], color="red", marker='o', linestyle='None', markersize=dot_size/5, label="Brownout"))
