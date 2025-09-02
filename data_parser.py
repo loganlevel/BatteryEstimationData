@@ -81,7 +81,7 @@ def main():
 
     # Save processed CSV
     os.makedirs("csvs/parsed", exist_ok=True)
-    output_csv = f"csvs/parsed{filename}.csv"
+    output_csv = f"csvs/parsed/{filename}.csv"
     df.to_csv(output_csv, index=False)
     print(f"Saved parsed CSV to: {output_csv}")
 
