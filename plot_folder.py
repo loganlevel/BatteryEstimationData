@@ -6,10 +6,11 @@ import numpy as np  # NEW
 from matplotlib.lines import Line2D
 
 # CONFIGURATION
-CSV_DIR = "csvs/manufacturers-cross-temp/temp-60c"
+CSV_DIR = "csvs/manufacturers-cross-temp/temp-60c/level"
 CSV_TAG = os.path.basename(os.path.normpath(CSV_DIR))
 PLOT_OUTPUT = f"plots/compare_all_{CSV_DIR.replace("/", "-")}.png"
-COMPUTE_LOW_BATT_BY_ALL_FAULTS=False
+COMPUTE_LOW_BATT_BY_ALL_FAULTS=True
+TIME_LIMIT_HOURS=80
 
 COLUMNS_TO_PLOT = [
     ("temp", "Temperature", "°C"),
@@ -48,7 +49,7 @@ fault_present = {
 
 for csv_path in csv_files:
     df = pd.read_csv(csv_path)
-    df = df.iloc[:150]
+    df = df.iloc[:(TIME_LIMIT_HOURS*2)]
 
     if "Time Elapsed (hours)" not in df.columns:
         print(f"Skipping {csv_path} (missing time column)")
