@@ -80,14 +80,19 @@ def main():
     filename = f"{product_name}_{hw_rev}_{dut_id}_{build_dt}-{date_str}_droop{droop_volume}_load{load_volume}_loaddur{load_dur}_relaxdur{relax_dur}_boltchecks{bolt_checks}"
 
     # Save processed CSV
-    os.makedirs("csvs", exist_ok=True)
+    os.makedirs("csvs/parsed", exist_ok=True)
+    output_csv = f"csvs/parsed{filename}.csv"
+    df.to_csv(output_csv, index=False)
+    print(f"Saved parsed CSV to: {output_csv}")
+
+    os.makedirs(f"plots/{filename}", exist_ok=True)
     output_csv = f"plots/{filename}/{filename}.csv"
     df.to_csv(output_csv, index=False)
     print(f"Saved parsed CSV to: {output_csv}")
 
     # Prepare plotting
-    os.makedirs("plots", exist_ok=True)
     time_col = "Time Elapsed (hours)"
+    os.makedirs("plots", exist_ok=True)
 
     # If boltDroop_mV is all zeros, set boltDroopMag_mV to all zeros
     if (df["boltDroop_mV"] == 0).all():
