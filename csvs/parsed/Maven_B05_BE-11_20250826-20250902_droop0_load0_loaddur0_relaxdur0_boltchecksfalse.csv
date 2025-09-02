@@ -1,7 +1,6 @@
 timestamp,temp,batt_mV,soundDroop_mV,boltDroop_mV,faults,batteryLevel,Time Elapsed (hours),soundDroopMag_mV,boltDroopMag_mV,meanLevel,nnLevel,fault_brownout,fault_bolt,fault_sound,fault_sound_brownout,fault_bolt_brownout
 946686756,51,3214,3123,3090,0,51,0.0,91,124,3,3,False,False,False,False,False
 946688560,59,3066,2979,2962,0,51,0.5011111111111111,87,104,3,3,False,False,False,False,False
-945899776,59,2432,512,0,0,17,-218.60555555555555,1920,2432,1,1,False,False,False,False,False
 946692166,60,3025,2946,2918,0,51,1.5027777777777778,79,107,3,3,False,False,False,False,False
 946693969,59,3024,2939,2909,0,51,2.0036111111111112,85,115,3,3,False,False,False,False,False
 946695773,60,3027,2936,2907,0,51,2.504722222222222,91,120,3,3,False,False,False,False,False
