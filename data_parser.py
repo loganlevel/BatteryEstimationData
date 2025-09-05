@@ -173,7 +173,14 @@ def main():
         df["fault_bolt_brownout"]
     )
     if fault_mask.any():
-        first_fault_idx = fault_mask.idxmax()
+        # Ignore the first 10% of data when searching for the first fault
+        ignore_n = int(len(df) * 0.1)
+        fault_mask_ignored = fault_mask.copy()
+        fault_mask_ignored.iloc[:ignore_n] = False
+        if fault_mask_ignored.any():
+            first_fault_idx = fault_mask_ignored.idxmax()
+        else:
+            first_fault_idx = len(df) - 1  # No fault after ignoring, use last index
         duration_to_first_fault = df[time_col].iloc[first_fault_idx] - df[time_col].iloc[0]
         print(f"Duration to first fault: {duration_to_first_fault:.2f} hours")
     else:
