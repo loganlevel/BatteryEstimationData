@@ -177,7 +177,8 @@ def main():
         duration_to_first_fault = df[time_col].iloc[first_fault_idx] - df[time_col].iloc[0]
         print(f"Duration to first fault: {duration_to_first_fault:.2f} hours")
     else:
-        print("No faults detected in the test.")
+        final_duration = df[time_col].iloc[-1] - df[time_col].iloc[0]
+        print(f"Final test duration: {final_duration:.2f} hours")
 
 if __name__ == "__main__":
     main()
