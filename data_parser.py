@@ -24,6 +24,7 @@ dut_names_dict = {
     "0x839c39e2f387076a": "BE-14",
     "0xcf5c4b9645c0882b": "BE-15",
     "0xdab931a77cb7db8a": "BE-16",
+    "0xb9831d39e10d1bb1": "BE-17",
     "0x342aed85e30d5473": "BE-18",
     "0x32b7e0c75a5f3d62": "BE-19",
 }
