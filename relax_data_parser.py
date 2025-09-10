@@ -7,6 +7,10 @@ import os
 from datetime import datetime
 import numpy as np
 
+# Configurable flag for low-pass filtering
+APPLY_LOW_PASS_FILTER = True  # Set to False to disable filtering
+
+
 def main():
     print("Paste the CSV (with columns: timestamp,batt_mV), then press Enter then Ctrl+D (macOS/Linux) or Ctrl+Z then Enter (Windows):\n")
     raw_input = sys.stdin.read()
@@ -45,24 +49,39 @@ def main():
     df.to_csv(out_csv_copy, index=False)
     print(f"Saved parsed CSV copy to: {out_csv_copy}")
 
+    if APPLY_LOW_PASS_FILTER:
+        RELAXATION_LOW_PASS_FILTER_ALPHA = 0.2  # Adjust alpha as needed (0 < alpha < 1)
+        filtered = []
+        prev = df["batt_mV"].iloc[0]
+        for v in df["batt_mV"]:
+            filtered_v = RELAXATION_LOW_PASS_FILTER_ALPHA * v + (1.0 - RELAXATION_LOW_PASS_FILTER_ALPHA) * prev
+            filtered.append(filtered_v)
+            prev = filtered_v
+        df["batt_mV_filtered"] = filtered
+        voltage_col = "batt_mV_filtered"
+        plot_label = "Filtered Voltage"
+        plot_title = "Battery Voltage vs Time (Low-pass Filtered)"
+    else:
+        voltage_col = "batt_mV"
+        plot_label = "Raw Voltage"
+        plot_title = "Battery Voltage vs Time (Raw)"
+
     plt.figure(figsize=(12, 5))
-    # Change x-axis to minutes
     df["Time Elapsed (minutes)"] = (df["timestamp"] - start_ts) / 60.0
-    plt.plot(df["Time Elapsed (minutes)"], df["batt_mV"])
-    plt.title("Battery Voltage vs Time")
+    plt.plot(df["Time Elapsed (minutes)"], df[voltage_col], label=plot_label)
+    plt.title(plot_title)
     plt.xlabel("Time Elapsed (minutes)")
     plt.ylabel("Voltage (mV)")
     plt.grid(True, which='both', axis='x', linestyle='--', alpha=0.7)
     plt.minorticks_on()
 
-    # Set x-ticks to align with 15, 30, 45, etc.
     min_minute = int(np.floor(df["Time Elapsed (minutes)"].min() / 15) * 15)
     max_minute = int(np.ceil(df["Time Elapsed (minutes)"].max() / 15) * 15)
     plt.xticks(np.arange(min_minute, max_minute + 1, 15))
 
     try:
-        ymin = max(0, df["batt_mV"].min() - 50)
-        ymax = df["batt_mV"].max() + 50
+        ymin = max(0, df[voltage_col].min() - 50)
+        ymax = df[voltage_col].max() + 50
         plt.ylim(ymin, ymax)
     except Exception:
         pass
