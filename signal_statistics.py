@@ -393,8 +393,8 @@ def main():
         print("No results to write (insufficient files/signals)."); return
 
     out_df = pd.DataFrame(rows).sort_values(by=["SoC_point_%", "detectability"], ascending=[True, False])
-    out_df.to_csv(args.out, index=False)
-    print(f"Wrote results to: {args.out}\n")
+    out_df.to_csv(f"{args.root}/{args.out}", index=False)
+    print(f"Wrote results to: {args.root}/{args.out}\n")
     with pd.option_context("display.max_columns", None, "display.width", 220):
         print(out_df.to_string(index=False, float_format=lambda v: f"{v:.6g}"))
 
