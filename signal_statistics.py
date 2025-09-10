@@ -9,49 +9,41 @@ from collections import defaultdict
 # =======  CONFIG  ========
 # =========================
 
-# Estimated lifetime (days) by product and days-left targets you care about
-ESTIMATED_LIFE_DAYS = {
-    "Lock Pro": 207,
-    "Lock Plus": 139,
-    "Bolt": 323,
-}
-DAYS_LEFT_TARGETS = {
-    "Lock Pro": [25, 4],
-    "Lock Plus": [25, 4],
-    "Bolt": [25, 4],
-}
+ESTIMATED_LIFE_DAYS = {"Lock Pro": 207, "Lock Plus": 139, "Bolt": 323}
+DAYS_LEFT_TARGETS   = {"Lock Pro": [25, 4], "Lock Plus": [25, 4], "Bolt": [25, 4]}
 
-# Compute SoC targets from the days-left targets (ceil to be conservative)
+# Compute SoC targets from days-left
 TARGET_SOC_POINTS = sorted(set(
     float(np.ceil(100.0 * (days_left / ESTIMATED_LIFE_DAYS[prod])))
     for prod, targets in DAYS_LEFT_TARGETS.items()
     for days_left in targets
 ))
 
-# Local slope & sigma windows (in %SoC)
+# --- Threshold selection modes ---
+# By default, treat larger SoC points as "upper" (replace-soon) and smaller as "lower" (dead/backstop).
+# You can override which SoC points should use time-constrained selection:
+UPPER_SOC_POINTS_OVERRIDE = None  # e.g., [18.0, 13.0]; or None to auto
+
+# Time-constrained selection (upper point)
+TIME_ALPHA_LATE = 0.01       # allow at most 1% late (trigger after target lead-time)
+TIME_OBJECTIVE  = "median"   # "mean" or "median" earliness to minimize (given late≤alpha)
+
+# NP selection (lower point)
+NP_ALPHA_MISS     = 0.01     # require TPR ≥ 1 - alpha
+NP_POS_BAND_BELOW = 2.0
+NP_NEG_GAP        = 5.0
+NP_NEG_BAND_WIDTH = 10.0
+
+# Local slope & sigma windows (in %SoC) for detectability (ranking only)
 SLOPE_WINDOW_PCT = 10.0
 SIGMA_BAND_PCT   = 2.0
-
-# 0% handling convention for slope/σ windows
-# "edge" -> center at 0% (windows hug edge); "mid" -> center at half-width (stable)
 ZERO_SLOPE_CENTER = "mid"   # "edge" or "mid"
 ZERO_SIGMA_CENTER = "mid"   # "edge" or "mid"
 
-# Fault search / noise / dataset requirements
-IGNORE_STARTUP_FRAC = 0.10  # ignore first 10% rows when finding first fault
-ADC_NOISE_MV        = 0.0   # meas noise added in quadrature to cross-file spread
-MIN_FILES           = 3     # min CSVs per signal to report
-
-# Neyman–Pearson thresholding (safety-first)
-NP_ALPHA_MISS       = 0.01  # require TPR >= 1 - alpha
-NP_POS_BAND_BELOW   = 2.0   # pos class: [max(0, p - this), p]
-NP_NEG_GAP          = 5.0   # exclude [p, p+gap]
-NP_NEG_BAND_WIDTH   = 10.0  # neg class: [p+gap, p+gap+width]
-
-# Cross-validation
-DO_LOOCV            = True  # prefer LOOCV median theta; fallback to pooled
-
-# Output CSV filename
+IGNORE_STARTUP_FRAC = 0.10
+ADC_NOISE_MV        = 0.0
+MIN_FILES           = 3
+DO_LOOCV            = True   # still used for NP (lower) to pick theta
 OUTPUT_CSV          = "detectability_thresholds_min.csv"
 
 # =========================
@@ -88,14 +80,11 @@ def soc_vector(length, fault_idx):
     return 100.0 * (1.0 - idx / float(fault_idx))
 
 def get_time_hours(df, fault_idx):
-    # Prefer explicit time if present; else return None (time metrics become NaN)
     col = None
     for c in df.columns:
         if c.strip().lower() in ("time elapsed (hours)", "time_elapsed_hours", "elapsed_hours"):
-            col = c
-            break
-    if col is None:
-        return None
+            col = c; break
+    if col is None: return None
     vals = pd.to_numeric(df[col], errors="coerce").values[:fault_idx+1]
     return vals.astype(float)
 
@@ -159,8 +148,7 @@ def summarize_per_file_for_np(series_list, p, pos_below, neg_gap, neg_width):
     return np.array(x_pos), np.array(x_neg)
 
 def direction_from_slope(b_local):
-    if np.isnan(b_local) or abs(b_local) < 1e-12:
-        return None
+    if np.isnan(b_local) or abs(b_local) < 1e-12: return None
     return (">=") if (b_local < 0) else ("<=")
 
 def direction_from_classes(x_pos, x_neg):
@@ -169,11 +157,9 @@ def direction_from_classes(x_pos, x_neg):
     return (">=") if (mpos > mneg) else ("<=")
 
 def sweep_np_threshold(x_pos, x_neg, direction, alpha):
-    if x_pos.size == 0 or x_neg.size == 0:
-        return (np.nan, np.nan, np.nan)
+    if x_pos.size == 0 or x_neg.size == 0: return (np.nan, np.nan, np.nan)
     xs = np.unique(np.concatenate([x_pos, x_neg]))
     eps = 1e-9 * (xs[-1] - xs[0] if xs.size > 1 and xs[-1] != xs[0] else 1.0)
-
     candidates = []
     for theta in xs:
         if direction == ">=":
@@ -184,21 +170,15 @@ def sweep_np_threshold(x_pos, x_neg, direction, alpha):
             tpr2 = np.mean(x_pos <= (theta + eps)); fpr2 = np.mean(x_neg <= (theta + eps))
         candidates.append((theta, tpr, fpr))
         candidates.append(((theta - eps) if direction==">=" else (theta + eps), tpr2, fpr2))
-
     feasible = [(th,tpr,fpr) for th,tpr,fpr in candidates if tpr >= (1.0 - alpha)]
     if feasible:
-        feasible.sort(key=lambda z: (z[2], -z[1]))
-        return feasible[0]
-    # fallback: max TPR, then min FPR
+        feasible.sort(key=lambda z: (z[2], -z[1])); return feasible[0]
     max_tpr = max(z[1] for z in candidates)
     near = [z for z in candidates if abs(z[1]-max_tpr) < 1e-12]
-    near.sort(key=lambda z: z[2])
-    return near[0]
+    near.sort(key=lambda z: z[2]); return near[0]
 
 def loocv_np_threshold(series_list, p, direction, alpha, pos_below, neg_gap, neg_width):
-    if len(series_list) < 2:
-        return (np.nan, np.nan, np.nan, 0)
-
+    if len(series_list) < 2: return (np.nan, np.nan, np.nan, 0)
     thetas, tprs, fprs = [], [], []
     for i in range(len(series_list)):
         train = series_list[:i] + series_list[i+1:]
@@ -212,7 +192,6 @@ def loocv_np_threshold(series_list, p, direction, alpha, pos_below, neg_gap, neg
         else:
             tprs.append(float(np.mean(x_pos_te <= theta))); fprs.append(float(np.mean(x_neg_te <= theta)))
         thetas.append(theta)
-
     if not thetas: return (np.nan, np.nan, np.nan, 0)
     return (float(np.median(thetas)), float(np.mean(tprs)), float(np.mean(fprs)), len(thetas))
 
@@ -221,60 +200,87 @@ def center_for_zero(p, width, mode):
     return 0.0 if mode == "edge" else max(0.0, width/2.0)
 
 def first_trigger_index(x, direction, theta):
-    if direction == ">=":
-        idxs = np.where(x >= theta)[0]
-    else:
-        idxs = np.where(x <= theta)[0]
+    idxs = np.where(x >= theta)[0] if direction == ">=" else np.where(x <= theta)[0]
     return int(idxs[0]) if idxs.size > 0 else None
 
 def time_metrics_for_threshold(series_list, direction, theta, p):
-    """
-    For each file, compute how many days early/late the trigger is relative to the target lead-time
-    implied by SoC point p. The target lead-time for a given file is (p/100)*total_life_days.
-    Returns (early_mean, early_worst, late_mean, late_worst, frac_late, n_used)
-    """
-    early_days = []
-    late_days  = []
-    used = 0
+    early_days, late_days, used = [], [], 0
     for soc, x, t_hours in series_list:
-        if t_hours is None or len(t_hours) < 2:
-            # Can't compute time metrics without elapsed hours
-            continue
+        if t_hours is None or len(t_hours) < 2: continue
         used += 1
-        t_dead_h = float(t_hours[-1])
-        total_days = t_dead_h / 24.0
-        target_days = (p / 100.0) * total_days  # desired days before dead for this file
-
+        t_dead_h = float(t_hours[-1]); total_days = t_dead_h / 24.0
+        target_days = (p / 100.0) * total_days
         trig_idx = first_trigger_index(x, direction, theta)
         if trig_idx is None:
-            # Never triggered before dead -> fully late by target_days
-            late_days.append(target_days)
-            continue
-
+            late_days.append(target_days); continue
         t_trig_h = float(t_hours[trig_idx])
-        days_left_at_trigger = max(0.0, (t_dead_h - t_trig_h) / 24.0)
-        delta = days_left_at_trigger - target_days  # + = early, - = late
-
-        if delta >= 0:
-            early_days.append(delta)
-        else:
-            late_days.append(-delta)
-
-    def mean_or_zero(a):
-        return float(np.mean(a)) if len(a) else 0.0
-    def max_or_zero(a):
-        return float(np.max(a)) if len(a) else 0.0
-
-    early_mean = mean_or_zero(early_days)
-    early_worst = max_or_zero(early_days)
-    late_mean = mean_or_zero(late_days)
-    late_worst = max_or_zero(late_days)
+        days_left_at_trigger = max(0.0, (t_dead_h - t_trig_h)/24.0)
+        delta = days_left_at_trigger - target_days
+        (early_days if delta >= 0 else late_days).append(abs(delta))
+    def mean_or_zero(a): return float(np.mean(a)) if a else 0.0
+    def max_or_zero(a):  return float(np.max(a))  if a else 0.0
+    early_mean, early_worst = mean_or_zero(early_days), max_or_zero(early_days)
+    late_mean,  late_worst  = mean_or_zero(late_days),  max_or_zero(late_days)
     n_total = used if used > 0 else 1
     frac_late = float(len(late_days)) / float(n_total)
     return early_mean, early_worst, late_mean, late_worst, frac_late, used
 
+# -------- Time-constrained threshold selection (upper point) --------
+def select_theta_time_constrained(series_list, direction, p, alpha_late=0.01, objective="median"):
+    """
+    Pick theta to minimize earliness subject to late fraction <= alpha_late.
+    Uses candidate thetas from per-file bands around the target SoC p (positives/negatives union).
+    Returns (theta, early_mean, early_worst, late_mean, late_worst, frac_late, n_used).
+    """
+    # Collect candidate thetas from all values seen near p to keep runtime small but relevant
+    # Reuse the NP bands to gather representative values
+    x_pos, x_neg = summarize_per_file_for_np(series_list, p, NP_POS_BAND_BELOW, NP_NEG_GAP, NP_NEG_BAND_WIDTH)
+    candidates = np.unique(np.concatenate([x_pos, x_neg])) if (x_pos.size or x_neg.size) else np.array([])
+    if candidates.size == 0:
+        # Fallback: brute-force a coarse grid from all observed x
+        xs_all = np.unique(np.concatenate([x for _, x, _ in series_list]))
+        if xs_all.size == 0: return (np.nan, 0, 0, 0, 0, 0, 0)
+        # sample every k to reduce cost
+        k = max(1, xs_all.size // 200)
+        candidates = xs_all[::k]
+
+    best = None
+    for theta in candidates:
+        early_mean, early_worst, late_mean, late_worst, frac_late, n_used = \
+            time_metrics_for_threshold(series_list, direction, theta, p)
+        if n_used == 0: continue
+        if frac_late > alpha_late:
+            continue  # violates "never (or rarely) late" constraint
+        # Objective: minimize earliness (median preferred)
+        score = early_worst if objective == "worst" else (np.median([early_mean, early_worst]) if objective == "median" else early_mean)
+        cand = (score, early_worst, late_worst, theta, early_mean, late_mean, frac_late, n_used)
+        if (best is None) or (cand < best):
+            best = cand
+
+    if best is None:
+        # No theta satisfies the late constraint; pick the one with smallest frac_late, then minimize earliness
+        fallback = None
+        for theta in candidates:
+            early_mean, early_worst, late_mean, late_worst, frac_late, n_used = \
+                time_metrics_for_threshold(series_list, direction, theta, p)
+            if n_used == 0: continue
+            cand = (frac_late, early_worst, theta, early_mean, late_mean, late_worst, n_used)
+            if (fallback is None) or (cand < fallback):
+                fallback = cand
+        if fallback is None:
+            return (np.nan, 0, 0, 0, 0, 0, 0)
+        # unpack fallback
+        _, early_worst, theta, early_mean, late_mean, late_worst, n_used = fallback
+        # recompute frac_late for the chosen theta
+        _, _, _, _, frac_late, _ = time_metrics_for_threshold(series_list, direction, theta, p)
+        return (theta, early_mean, early_worst, late_mean, late_worst, frac_late, n_used)
+
+    # unpack best
+    score, early_worst, late_worst, theta, early_mean, late_mean, frac_late, n_used = best
+    return (theta, early_mean, early_worst, late_mean, late_worst, frac_late, n_used)
+
 def main():
-    parser = argparse.ArgumentParser(description="Compute minimal detectability & thresholds + time metrics.")
+    parser = argparse.ArgumentParser(description="Compute detectability & thresholds (time-constrained upper, NP lower).")
     parser.add_argument("root", help="Root folder (searched recursively) for CSV files.")
     parser.add_argument("--out", default=OUTPUT_CSV, help=f"Output CSV path (default: {OUTPUT_CSV})")
     args = parser.parse_args()
@@ -299,64 +305,88 @@ def main():
             except Exception as e:
                 print(f"[WARN] Failed parsing series in {pth} ({col}): {e}")
 
+    # Decide which SoC points are "upper"
+    if UPPER_SOC_POINTS_OVERRIDE is None:
+        if len(TARGET_SOC_POINTS) <= 1:
+            upper_points = set(TARGET_SOC_POINTS)
+        elif len(TARGET_SOC_POINTS) == 2:
+            upper_points = {max(TARGET_SOC_POINTS)}
+        else:
+            med = np.median(TARGET_SOC_POINTS)
+            upper_points = {p for p in TARGET_SOC_POINTS if p >= med}
+    else:
+        upper_points = set(UPPER_SOC_POINTS_OVERRIDE)
+
     rows = []
     for (name, col), series_list in series_by_signal.items():
         if len(series_list) < MIN_FILES: continue
         soc_all, x_all = build_pooled_arrays(series_list)
 
         for p in TARGET_SOC_POINTS:
-            # Centers per convention
+            # Detectability / Uncertainty (for ranking only)
             slope_center = center_for_zero(p, SLOPE_WINDOW_PCT, ZERO_SLOPE_CENTER)
             sigma_center = center_for_zero(p, SIGMA_BAND_PCT, ZERO_SIGMA_CENTER)
-
-            # Detectability / Uncertainty
             b_local  = pooled_slope_local(soc_all, x_all, center_pct=slope_center, window_pct=SLOPE_WINDOW_PCT)
             sigma_tot = sigma_total_at_point(series_list, center_pct=sigma_center, band_pct=SIGMA_BAND_PCT, adc_noise=ADC_NOISE_MV)
-            if np.isnan(b_local) or np.isnan(sigma_tot) or abs(b_local) < 1e-12:
-                detect = np.nan; soc_unc = np.nan
-            else:
+            detect = np.nan; soc_unc = np.nan
+            if not (np.isnan(b_local) or np.isnan(sigma_tot) or abs(b_local) < 1e-12):
                 detect = abs(b_local) / sigma_tot
                 soc_unc = sigma_tot / abs(b_local)
 
-            # Direction: slope sign first; fall back to class medians
+            # Direction from slope; fallback to class medians
             x_pos, x_neg = summarize_per_file_for_np(series_list, p, NP_POS_BAND_BELOW, NP_NEG_GAP, NP_NEG_BAND_WIDTH)
             direction = direction_from_slope(b_local) or direction_from_classes(x_pos, x_neg)
 
-            # Thresholds (prefer LOOCV)
-            theta_pool, tpr_pool, fpr_pool = sweep_np_threshold(x_pos, x_neg, direction, NP_ALPHA_MISS)
-            if DO_LOOCV:
-                theta_cv, tpr_cv, fpr_cv, n_folds = loocv_np_threshold(series_list, p, direction, NP_ALPHA_MISS,
-                                                                       NP_POS_BAND_BELOW, NP_NEG_GAP, NP_NEG_BAND_WIDTH)
-            else:
-                theta_cv, tpr_cv, fpr_cv, n_folds = (np.nan, np.nan, np.nan, 0)
+            if p in upper_points:
+                # -------- Upper point: time-constrained selection --------
+                theta_out, early_mean, early_worst, late_mean, late_worst, frac_late, n_used = \
+                    select_theta_time_constrained(series_list, direction, p, TIME_ALPHA_LATE, TIME_OBJECTIVE)
 
-            if DO_LOOCV and n_folds > 0 and not np.isnan(theta_cv):
-                theta_out, TPR_out, FPR_out = theta_cv, tpr_cv, fpr_cv
-            else:
-                theta_out, TPR_out, FPR_out = theta_pool, tpr_pool, fpr_pool
+                # For reference, also compute TPR/FPR of this theta under NP bands
+                TPR_out = FPR_out = np.nan
+                if x_pos.size and x_neg.size and not np.isnan(theta_out):
+                    if direction == ">=":
+                        TPR_out = float(np.mean(x_pos >= theta_out))
+                        FPR_out = float(np.mean(x_neg >= theta_out))
+                    else:
+                        TPR_out = float(np.mean(x_pos <= theta_out))
+                        FPR_out = float(np.mean(x_neg <= theta_out))
 
-            # --- Time-domain evaluation of the chosen threshold (days early/late) ---
-            early_mean, early_worst, late_mean, late_worst, frac_late, n_used = \
-                time_metrics_for_threshold(series_list, direction, theta_out, p)
+            else:
+                # -------- Lower point: NP selection (safety backstop) --------
+                theta_pool, tpr_pool, fpr_pool = sweep_np_threshold(x_pos, x_neg, direction, NP_ALPHA_MISS)
+                if DO_LOOCV:
+                    theta_cv, tpr_cv, fpr_cv, n_folds = loocv_np_threshold(series_list, p, direction, NP_ALPHA_MISS,
+                                                                           NP_POS_BAND_BELOW, NP_NEG_GAP, NP_NEG_BAND_WIDTH)
+                else:
+                    theta_cv, tpr_cv, fpr_cv, n_folds = (np.nan, np.nan, np.nan, 0)
+                if DO_LOOCV and n_folds > 0 and not np.isnan(theta_cv):
+                    theta_out, TPR_out, FPR_out = theta_cv, tpr_cv, fpr_cv
+                else:
+                    theta_out, TPR_out, FPR_out = theta_pool, tpr_pool, fpr_pool
+                # Time metrics (for visibility; not the selection driver here)
+                early_mean, early_worst, late_mean, late_worst, frac_late, n_used = \
+                    time_metrics_for_threshold(series_list, direction, theta_out, p)
 
             rows.append({
                 "signal": name,
                 "column": col,
-                "SoC_point_%": int(np.floor(p)),
+                "SoC_point_%": round(p, 2),
+                "mode": "time_constrained" if p in upper_points else "np_backstop",
                 "detectability": round(detect, 3) if not np.isnan(detect) else np.nan,
                 "SoC_uncertainty_%": round(soc_unc, 2) if not np.isnan(soc_unc) else np.nan,
-                "threshold_direction": direction,     # interpret: trigger if (x {dir} theta_mV)
-                "theta_mV": int(np.floor(theta_out)) if not np.isnan(theta_out) else np.nan,
-                "TPR": round(TPR_out, 3) if not np.isnan(TPR_out) else np.nan,
-                "FPR": round(FPR_out, 3) if not np.isnan(FPR_out) else np.nan,
-                "N_files": int(len(series_list)),
-                # Time-domain metrics (days); computed when Time Elapsed (hours) is present
+                "threshold_direction": direction,
+                "theta_mV": round(float(theta_out), 2) if not np.isnan(theta_out) else np.nan,
+                # "TPR": round(TPR_out, 3) if not np.isnan(TPR_out) else np.nan,
+                # "FPR": round(FPR_out, 3) if not np.isnan(FPR_out) else np.nan,
+                "N_files": len(series_list),
+                # Time-domain metrics (days)
                 "avg_days_early": round(early_mean, 2) if not np.isnan(early_mean) else np.nan,
                 "worst_days_early": round(early_worst, 2) if not np.isnan(early_worst) else np.nan,
                 "avg_days_late": round(late_mean, 2) if not np.isnan(late_mean) else np.nan,
                 "worst_days_late": round(late_worst, 2) if not np.isnan(late_worst) else np.nan,
                 "frac_late": round(frac_late, 3) if not np.isnan(frac_late) else np.nan,
-                "N_files_with_time": int(n_used),
+                "N_files_with_time": n_used,
             })
 
     if not rows:
@@ -365,7 +395,7 @@ def main():
     out_df = pd.DataFrame(rows).sort_values(by=["SoC_point_%", "detectability"], ascending=[True, False])
     out_df.to_csv(args.out, index=False)
     print(f"Wrote results to: {args.out}\n")
-    with pd.option_context("display.max_columns", None, "display.width", 200):
+    with pd.option_context("display.max_columns", None, "display.width", 220):
         print(out_df.to_string(index=False, float_format=lambda v: f"{v:.6g}"))
 
 if __name__ == "__main__":
