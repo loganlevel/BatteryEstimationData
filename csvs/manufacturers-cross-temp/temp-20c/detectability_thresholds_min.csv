@@ -1,0 +1,16 @@
+Signal,N,SoC Target (%),Threshold optimization,Detectability,SoC Uncertainty (%),Threshold Direction,Threshold (mV),Avg. Early Pred. (days),Worst. Early Pred. (days),Avg. Late Pred. (days),Worst. Late Pred. (days)
+Bolt Droop,18,2.0,np_backstop,0.571,1.75,>=,611.0,0.07,0.21,0.03,0.05
+ST Droop,18,2.0,np_backstop,0.541,1.85,>=,213.0,0.66,2.99,0.0,0.0
+OCV,18,2.0,np_backstop,0.185,5.41,<=,2647.0,0.27,0.48,0.06,0.06
+Bolt Droop,18,3.0,np_backstop,0.593,1.69,>=,470.0,0.09,0.22,0.03,0.04
+ST Droop,18,3.0,np_backstop,0.54,1.85,>=,223.0,0.77,2.96,0.03,0.04
+OCV,18,3.0,np_backstop,0.188,5.31,<=,2673.0,0.29,0.51,0.04,0.04
+ST Droop,18,8.0,time_constrained,0.366,2.73,>=,152.0,1.08,2.82,0.0,0.0
+Bolt Droop,18,8.0,time_constrained,0.321,3.12,>=,275.0,0.59,2.8,0.0,0.0
+OCV,18,8.0,time_constrained,0.308,3.24,<=,2768.0,0.39,0.71,0.0,0.0
+Bolt Droop,18,13.0,time_constrained,0.291,3.43,>=,228.0,0.86,2.67,0.0,0.0
+OCV,18,13.0,time_constrained,0.208,4.8,<=,2791.0,0.34,0.68,0.0,0.0
+ST Droop,18,13.0,time_constrained,0.164,6.1,>=,152.0,1.01,2.67,0.0,0.0
+OCV,18,18.0,time_constrained,0.198,5.06,<=,2830.0,0.38,0.88,0.0,0.0
+Bolt Droop,18,18.0,time_constrained,0.167,5.97,>=,218.0,0.77,2.52,0.0,0.0
+ST Droop,18,18.0,time_constrained,0.112,8.92,>=,138.0,1.04,2.52,0.0,0.0

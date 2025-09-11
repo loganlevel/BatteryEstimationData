@@ -51,7 +51,10 @@ OUTPUT_CSV          = "detectability_thresholds_min.csv"
 # =========================
 
 def find_csvs(root):
-    return [p for p in glob.glob(os.path.join(root, "**", "*.csv"), recursive=True)]
+    return [
+        p for p in glob.glob(os.path.join(root, "**", "*.csv"), recursive=True)
+        if os.path.basename(p) != OUTPUT_CSV
+    ]
 
 def load_csv(path):
     df = pd.read_csv(path)
@@ -73,7 +76,10 @@ def first_fault_index(df, ignore_frac=0.10):
         if c.startswith("fault_"):
             cond |= df[c].astype(bool).values
     rel = np.where(cond[start:])[0]
-    return (start + rel[0]) if len(rel) else None
+    if len(rel):
+        return start + rel[0]
+    else:
+        return n - 1  # take last index if no fault found
 
 def soc_vector(length, fault_idx):
     idx = np.arange(fault_idx + 1, dtype=float)
@@ -90,11 +96,9 @@ def get_time_hours(df, fault_idx):
 
 def pick_signal_columns(df):
     cols = {}
-    cols["relaxed"] = "batt_mV" if "batt_mV" in df.columns else None
-    cols["sound"]   = ("soundDroopMag_mV" if "soundDroopMag_mV" in df.columns
-                       else ("soundDroop_mV" if "soundDroop_mV" in df.columns else None))
-    cols["bolt"]    = ("boltDroopMag_mV"  if "boltDroopMag_mV"  in df.columns
-                       else ("boltDroop_mV"  if "boltDroop_mV"  in df.columns else None))
+    cols["OCV"] = "batt_mV" if "batt_mV" in df.columns else None
+    cols["ST Droop"]   = "soundDroopMag_mV" if "soundDroopMag_mV" in df.columns else None
+    cols["Bolt Droop"]    = "boltDroopMag_mV"  if "boltDroopMag_mV"  in df.columns else None
     return {k: v for k, v in cols.items() if v is not None}
 
 def per_file_series(df, sig_col, fault_idx):
@@ -369,30 +373,30 @@ def main():
                     time_metrics_for_threshold(series_list, direction, theta_out, p)
 
             rows.append({
-                "signal": name,
-                "column": col,
-                "SoC_point_%": round(p, 2),
-                "mode": "time_constrained" if p in upper_points else "np_backstop",
-                "detectability": round(detect, 3) if not np.isnan(detect) else np.nan,
-                "SoC_uncertainty_%": round(soc_unc, 2) if not np.isnan(soc_unc) else np.nan,
-                "threshold_direction": direction,
-                "theta_mV": round(float(theta_out), 2) if not np.isnan(theta_out) else np.nan,
+                "Signal": name,
+                "N": len(series_list),
+                # "column": col,
+                "SoC Target (%)": round(p, 2),
+                "Threshold optimization": "Need Replacement" if p in upper_points else "Non Functional",
+                "Detectability": round(detect, 3) if not np.isnan(detect) else np.nan,
+                # "SoC Uncertainty (%)": round(soc_unc, 2) if not np.isnan(soc_unc) else np.nan,
+                "Threshold Direction": direction,
+                "Threshold (mV)": round(float(theta_out), 0) if not np.isnan(theta_out) else np.nan,
                 # "TPR": round(TPR_out, 3) if not np.isnan(TPR_out) else np.nan,
                 # "FPR": round(FPR_out, 3) if not np.isnan(FPR_out) else np.nan,
-                "N_files": len(series_list),
                 # Time-domain metrics (days)
-                "avg_days_early": round(early_mean, 2) if not np.isnan(early_mean) else np.nan,
-                "worst_days_early": round(early_worst, 2) if not np.isnan(early_worst) else np.nan,
-                "avg_days_late": round(late_mean, 2) if not np.isnan(late_mean) else np.nan,
-                "worst_days_late": round(late_worst, 2) if not np.isnan(late_worst) else np.nan,
-                "frac_late": round(frac_late, 3) if not np.isnan(frac_late) else np.nan,
-                "N_files_with_time": n_used,
+                "Avg. Early Pred. (days)": round(early_mean, 2) if not np.isnan(early_mean) else np.nan,
+                "Worst. Early Pred. (days)": round(early_worst, 2) if not np.isnan(early_worst) else np.nan,
+                "Avg. Late Pred. (days)": round(late_mean, 2) if not np.isnan(late_mean) else np.nan,
+                "Worst. Late Pred. (days)": round(late_worst, 2) if not np.isnan(late_worst) else np.nan,
+                # "frac_late": round(frac_late, 3) if not np.isnan(frac_late) else np.nan,
+                # "N": n_used,
             })
 
     if not rows:
         print("No results to write (insufficient files/signals)."); return
 
-    out_df = pd.DataFrame(rows).sort_values(by=["SoC_point_%", "detectability"], ascending=[True, False])
+    out_df = pd.DataFrame(rows).sort_values(by=["SoC Target (%)", "Detectability"], ascending=[True, False])
     out_df.to_csv(f"{args.root}/{args.out}", index=False)
     print(f"Wrote results to: {args.root}/{args.out}\n")
     with pd.option_context("display.max_columns", None, "display.width", 220):
