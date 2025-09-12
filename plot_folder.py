@@ -6,7 +6,7 @@ import numpy as np  # NEW
 from matplotlib.lines import Line2D
 
 # CONFIGURATION
-CSV_DIR = "csvs/manufacturers-cross-temp/temp-m20c/level"
+CSV_DIR = "csvs/manufacturers-cross-temp/temp-m20c/duracell"
 CSV_TAG = os.path.basename(os.path.normpath(CSV_DIR))
 PLOT_OUTPUT = f"plots/compare_all_{CSV_DIR.replace("/", "-")}.png"
 COMPUTE_LOW_BATT_BY_ALL_FAULTS=True
@@ -76,7 +76,7 @@ for csv_path in csv_files:
         if any_fault.any():
             # Ignore faults in the first 10% of the data
             n_rows = len(df)
-            min_idx = int(np.ceil(0.10 * n_rows))
+            min_idx = int(np.ceil(0.30 * n_rows))
             any_fault.iloc[:min_idx] = False
             if any_fault.any():
                 idx_first_fault = any_fault.idxmax()
@@ -91,6 +91,19 @@ for csv_path in csv_files:
         else:
             # No faults at all, use last index
             idx_low_batt = df.index[-1]
+
+    # Trim data to 5 indices after low battery index
+    # Trim data to 5 indices after the first fault (outside exclusion region)
+    if fault_cols:
+        any_fault = df[fault_cols].any(axis=1)
+        n_rows = len(df)
+        min_idx = int(np.ceil(0.30 * n_rows))
+        any_fault.iloc[:min_idx] = False  # Exclude first 30%
+        if any_fault.any():
+            idx_first_fault = any_fault.idxmax()
+            end_idx = min(idx_first_fault + 5, len(df))
+            df = df.iloc[:end_idx]
+            t_series = t_series.iloc[:end_idx]
 
     for i, (col, title, unit) in enumerate(COLUMNS_TO_PLOT):
         ax = axes[i]
@@ -142,7 +155,7 @@ for csv_path in csv_files:
         if col == "temp":
             ax.set_ylim(-30, 70)
         elif col == "batt_mV":
-            ax.set_ylim(2000, 3400)
+            ax.set_ylim(1800, 3400)
         elif col in ("soundDroopMag_mV", "boltDroopMag_mV"):
             ax.set_ylim(0, 2500)
         else:
