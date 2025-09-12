@@ -179,7 +179,7 @@ def main():
     )
     if fault_mask.any():
         # Ignore the first 10% of data when searching for the first fault
-        ignore_n = int(len(df) * 0.1)
+        ignore_n = int(len(df) * 0.3)
         fault_mask_ignored = fault_mask.copy()
         fault_mask_ignored.iloc[:ignore_n] = False
         if fault_mask_ignored.any():
