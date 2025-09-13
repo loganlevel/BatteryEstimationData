@@ -1,0 +1,16 @@
+Signal,N,SoC Target (%),Threshold optimization,Detectability,Threshold Direction,Threshold (mV),Avg. Early Pred. (days),Worst. Early Pred. (days),Avg. Late Pred. (days),Worst. Late Pred. (days)
+ST Droop,15,2.0,Non Functional,0.169,>=,748.0,0.72,1.84,0.01,0.03
+OCV,15,2.0,Non Functional,0.152,<=,2616.0,0.28,0.52,0.03,0.03
+Bolt Droop,15,2.0,Non Functional,0.137,<=,1774.0,1.49,1.88,0.0,0.0
+ST Droop,15,3.0,Non Functional,0.191,>=,700.0,0.8,1.82,0.02,0.02
+OCV,15,3.0,Non Functional,0.157,<=,2628.0,0.29,0.55,0.02,0.02
+Bolt Droop,15,3.0,Non Functional,0.139,<=,1794.0,1.47,1.86,0.0,0.0
+ST Droop,15,8.0,Need Replacement,0.181,>=,502.0,1.32,1.77,0.0,0.0
+OCV,15,8.0,Need Replacement,0.153,<=,2739.0,0.74,1.18,0.0,0.0
+Bolt Droop,15,8.0,Need Replacement,0.104,<=,1316.0,1.39,1.77,0.0,0.0
+ST Droop,15,13.0,Need Replacement,0.132,>=,486.0,1.32,1.67,0.0,0.0
+OCV,15,13.0,Need Replacement,0.121,<=,2753.0,0.76,1.1,0.0,0.0
+Bolt Droop,15,13.0,Need Replacement,0.047,<=,1446.0,1.31,1.67,0.0,0.0
+OCV,15,18.0,Need Replacement,0.089,<=,2766.0,0.82,1.09,0.0,0.0
+ST Droop,15,18.0,Need Replacement,0.06,>=,476.0,1.25,1.58,0.0,0.0
+Bolt Droop,15,18.0,Need Replacement,0.001,>=,1564.0,0.65,1.54,0.0,0.0

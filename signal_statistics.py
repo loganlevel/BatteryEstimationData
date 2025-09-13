@@ -40,7 +40,7 @@ SIGMA_BAND_PCT   = 2.0
 ZERO_SLOPE_CENTER = "mid"   # "edge" or "mid"
 ZERO_SIGMA_CENTER = "mid"   # "edge" or "mid"
 
-IGNORE_STARTUP_FRAC = 0.10
+IGNORE_STARTUP_FRAC = 0.30
 ADC_NOISE_MV        = 0.0
 MIN_FILES           = 3
 DO_LOOCV            = True   # still used for NP (lower) to pick theta
