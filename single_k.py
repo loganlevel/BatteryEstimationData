@@ -32,9 +32,9 @@ import pandas as pd
 # =========================
 
 DATASETS = [
-    {"root": "csvs/manufacturers-cross-temp/temp-m10c", "temp_c": -10.0},
+    {"root": "csvs/manufacturers-cross-temp/temp-m20c", "temp_c": -20.0},
     {"root": "csvs/manufacturers-cross-temp/temp-20C",  "temp_c":  20.0},
-    {"root": "csvs/manufacturers-cross-temp/temp-60c",  "temp_c":  58.0},
+    {"root": "csvs/manufacturers-cross-temp/temp-60c",  "temp_c":  59.0},
 ]
 
 # SoC window to use for estimating K and D_STRONG

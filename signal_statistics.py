@@ -9,8 +9,8 @@ from collections import defaultdict
 # =======  CONFIG  ========
 # =========================
 
-ESTIMATED_LIFE_DAYS = {"Lock Pro": 207, "Lock Plus": 139, "Bolt": 323}
-DAYS_LEFT_TARGETS   = {"Lock Pro": [25, 4], "Lock Plus": [25, 4], "Bolt": [25, 4]}
+ESTIMATED_LIFE_DAYS = {"Maven": 207, "Gemini": 139, "Apollo": 323}
+DAYS_LEFT_TARGETS   = {"Maven": [25, 4], "Gemini": [25, 4], "Apollo": [25, 4]}
 
 # Compute SoC targets from days-left
 TARGET_SOC_POINTS = sorted(set(
