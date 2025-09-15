@@ -158,8 +158,12 @@ def main():
         # Set y-axis limits
         if col == "temp":
             ax.set_ylim(-30, 70)
+        elif col == "batt_mV":
+            ax.set_ylim(2000, 3400)
+        elif col in ("soundDroopMag_mV", "boltDroopMag_mV"):
+            ax.set_ylim(0, 2500)
         else:
-            ax.set_ylim(0, 3400)  # mV for voltage plots
+            ax.set_ylim(0, 3400)
 
     for ax in axes:
         ax.set_xlabel("Time Elapsed (hours)")
