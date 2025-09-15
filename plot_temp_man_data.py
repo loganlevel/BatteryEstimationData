@@ -106,7 +106,7 @@ for tf in temp_folders:
                 any_fault = df[fault_cols].any(axis=1)
                 if any_fault.any():
                     n_rows = len(df)
-                    min_idx = int(np.ceil(0.10 * n_rows))
+                    min_idx = int(np.ceil(0.30 * n_rows))
                     any_fault.iloc[:min_idx] = False
                     if any_fault.any():
                         idx_first_fault = any_fault.idxmax()
@@ -115,6 +115,12 @@ for tf in temp_folders:
                         hours_to_fault = t_fault - t0
                         t_target = t_fault - 0.10 * hours_to_fault
                         idx_low_batt = (t_series - t_target).abs().idxmin()
+            
+            # Trim data 5 indices after the first fault
+            trim_idx = idx_first_fault + 5
+            if trim_idx < len(df):
+                df = df.iloc[:trim_idx]
+                t_series = df["Time Elapsed (hours)"]
 
             for i, (col, title, unit) in enumerate(COLUMNS_TO_PLOT):
                 ax = axes[i]
