@@ -92,13 +92,12 @@ def main():
         sys.exit(0)
     for d in sorted(subdirs):
         csv_path, png_path = find_single_csv_png(d)
-        if csv_path and png_path:
+        if (csv_path and png_path) and "Maven_B" in csv_path:
             try:
                 regenerate_png_from_csv(csv_path, png_path)
+                # print(csv_path)
             except Exception as e:
                 print(f"[err] {d}: {e}")
-        else:
-            print(f"[skip] {d}: needs exactly one CSV and one PNG")
 
 if __name__ == "__main__":
     main()
