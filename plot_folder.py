@@ -6,7 +6,7 @@ import numpy as np  # NEW
 from matplotlib.lines import Line2D
 
 # CONFIGURATION
-CSV_DIR = "csvs/manufacturers-cross-temp/temp-40c/tenergy"
+CSV_DIR = "csvs/manufacturers-cross-temp/temp-m20c/energizer"
 CSV_TAG = os.path.basename(os.path.normpath(CSV_DIR))
 PLOT_OUTPUT = f"plots/compare_all_{CSV_DIR.replace("/", "-")}.png"
 COMPUTE_LOW_BATT_BY_ALL_FAULTS=True
@@ -94,11 +94,10 @@ for csv_path in csv_files:
             idx_low_batt = df.index[-1]
             idx_first_fault = idx_low_batt
 
-            if idx_first_fault:
-                trim_idx = idx_first_fault + 5
-                if trim_idx < len(df):
-                    df = df.iloc[:trim_idx]
-                    t_series = df["Time Elapsed (hours)"]
+        trim_idx = idx_first_fault + 5
+        if trim_idx < len(df):
+            df = df.iloc[:trim_idx]
+            t_series = df["Time Elapsed (hours)"]
 
     for i, (col, title, unit) in enumerate(COLUMNS_TO_PLOT):
         ax = axes[i]
