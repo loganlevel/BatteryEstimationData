@@ -6,7 +6,7 @@ import numpy as np  # NEW
 from matplotlib.lines import Line2D
 
 # CONFIGURATION
-CSV_DIR = "csvs/manufacturers-cross-temp/temp-m20c/tenergy"
+CSV_DIR = "csvs/manufacturers-cross-temp/temp-40c/level"
 CSV_TAG = os.path.basename(os.path.normpath(CSV_DIR))
 PLOT_OUTPUT = f"plots/compare_all_{CSV_DIR.replace("/", "-")}.png"
 COMPUTE_LOW_BATT_BY_ALL_FAULTS=True
@@ -92,18 +92,10 @@ for csv_path in csv_files:
             # No faults at all, use last index
             idx_low_batt = df.index[-1]
 
-    # Trim data to 5 indices after low battery index
-    # Trim data to 5 indices after the first fault (outside exclusion region)
-    if fault_cols:
-        any_fault = df[fault_cols].any(axis=1)
-        n_rows = len(df)
-        min_idx = int(np.ceil(0.30 * n_rows))
-        any_fault.iloc[:min_idx] = False  # Exclude first 30%
-        if any_fault.any():
-            idx_first_fault = any_fault.idxmax()
-            end_idx = min(idx_first_fault + 5, len(df))
-            df = df.iloc[:end_idx]
-            t_series = t_series.iloc[:end_idx]
+    trim_idx = idx_first_fault + 5
+    if trim_idx < len(df):
+        df = df.iloc[:trim_idx]
+        t_series = df["Time Elapsed (hours)"]
 
     for i, (col, title, unit) in enumerate(COLUMNS_TO_PLOT):
         ax = axes[i]
