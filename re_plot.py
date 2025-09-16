@@ -58,7 +58,7 @@ def regenerate_png_from_csv(csv_path, png_path):
         if col == "temp":
             ax.set_ylim(-30, 70)
         elif col == "batt_mV":
-            ax.set_ylim(2000, 3400)
+            ax.set_ylim(1800, 3400)
         elif col in ("soundDroopMag_mV", "boltDroopMag_mV"):
             ax.set_ylim(0, 2500)
         else:
