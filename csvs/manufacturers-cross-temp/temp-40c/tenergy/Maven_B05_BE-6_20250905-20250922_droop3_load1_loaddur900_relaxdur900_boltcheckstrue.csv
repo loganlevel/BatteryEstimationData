@@ -140,4 +140,3 @@ timestamp,temp,batt_mV,soundDroop_mV,boltDroop_mV,faults,batteryLevel,Time Elaps
 946936446,39,2474,2033,1633,0,17,69.1288888888889,441,841,1,1,False,False,False,False,False
 946938249,40,2441,1899,1375,0,17,69.62972222222223,542,1066,1,1,False,False,False,False,False
 946940053,40,2362,1349,761,0,17,70.13083333333333,1013,1601,1,1,False,False,False,False,False
-947000811,39,2605,628,681,6,17,87.00805555555556,1977,1924,1,1,False,True,True,False,False
