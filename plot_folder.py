@@ -151,7 +151,7 @@ for csv_path in csv_files:
         if col == "temp":
             ax.set_ylim(-30, 70)
         elif col == "batt_mV":
-            ax.set_ylim(1800, 3400)
+            ax.set_ylim(1000, 3400)
         elif col in ("soundDroopMag_mV", "boltDroopMag_mV"):
             ax.set_ylim(0, 2500)
         else:
