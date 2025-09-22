@@ -6,7 +6,7 @@ import numpy as np  # NEW
 from matplotlib.lines import Line2D
 
 # CONFIGURATION
-CSV_DIR = "csvs/manufacturers-cross-temp/temp-0c/amazon"
+CSV_DIR = "csvs/manufacturers-cross-temp/temp-0c/duracell"
 CSV_TAG = os.path.basename(os.path.normpath(CSV_DIR))
 PLOT_OUTPUT = f"plots/compare_all_{CSV_DIR.replace("/", "-")}.png"
 COMPUTE_LOW_BATT_BY_ALL_FAULTS=True
@@ -151,7 +151,7 @@ for csv_path in csv_files:
         if col == "temp":
             ax.set_ylim(-30, 70)
         elif col == "batt_mV":
-            ax.set_ylim(1800, 3400)
+            ax.set_ylim(1000, 3400)
         elif col in ("soundDroopMag_mV", "boltDroopMag_mV"):
             ax.set_ylim(0, 2500)
         else:
