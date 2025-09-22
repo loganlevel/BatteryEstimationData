@@ -6,7 +6,7 @@ import numpy as np
 from matplotlib.lines import Line2D
 
 # CONFIGURATION
-CSV_DIR = "csvs/manufacturers-cross-temp/temp-m20c"
+CSV_DIR = "csvs/manufacturers-cross-temp/temp-40c"
 CSV_TAG = os.path.basename(os.path.normpath(CSV_DIR))
 PLOT_OUTPUT = f"plots/compare_all_{CSV_DIR.replace("/","-")}.png"
 COMPUTE_LOW_BATT_BY_ALL_FAULTS=True
@@ -106,18 +106,24 @@ for sf in subfolders:
         idx_low_batt = None
         if fault_cols:
             any_fault = df[fault_cols].any(axis=1)
+            n_rows = len(df)
+            min_idx = int(np.ceil(0.30 * n_rows))
+            any_fault.iloc[:min_idx] = False
             if any_fault.any():
-                # Ignore faults in the first 10% of the data
-                n_rows = len(df)
-                min_idx = int(np.ceil(0.30 * n_rows))
-                any_fault.iloc[:min_idx] = False
-                if any_fault.any():
-                    idx_first_fault = any_fault.idxmax()
-                    t0 = t_series.iloc[0]
-                    t_fault = t_series.loc[idx_first_fault]
-                    hours_to_fault = t_fault - t0
-                    t_target = t_fault - 0.10 * hours_to_fault
-                    idx_low_batt = (t_series - t_target).abs().idxmin()
+                idx_first_fault = any_fault.idxmax()
+                t0 = t_series.iloc[0]
+                t_fault = t_series.loc[idx_first_fault]
+                hours_to_fault = t_fault - t0
+                t_target = t_fault - 0.10 * hours_to_fault
+                idx_low_batt = (t_series - t_target).abs().idxmin()
+        else:
+            # No faults: use last index as first fault, and low batt 10% before
+            idx_first_fault = df.index[-1]
+            t0 = t_series.iloc[0]
+            t_fault = t_series.loc[idx_first_fault]
+            hours_to_fault = t_fault - t0
+            t_target = t_fault - 0.10 * hours_to_fault
+            idx_low_batt = (t_series - t_target).abs().idxmin()
                 
         # Trim data 5 indices after the first fault
         trim_idx = idx_first_fault + 5
