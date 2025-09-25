@@ -277,12 +277,9 @@ def bucket_threshold_temp_c(bucket_path):
 # =========================
 
 def main():
-    import argparse
-    parser = argparse.ArgumentParser(description="Emit C arrays of OCV/ST thresholds per temperature bucket.")
-    parser.add_argument("root", help="Root folder with first-level bucket subfolders.")
-    args = parser.parse_args()
+    root = "csvs/manufacturers-cross-temp"
 
-    buckets = sorted(list_buckets(args.root))
+    buckets = sorted(list_buckets(root))
     # Gather per-bucket series
     bucket_series = {}  # bucket_name -> { "temp_c": int or None, "signals": { "OCV": [...], "ST": [...] } }
     for b in buckets:
