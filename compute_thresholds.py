@@ -27,7 +27,7 @@ from collections import defaultdict, Counter
 # =========================
 
 ESTIMATED_LIFE_DAYS = {"Maven": 207, "Gemini": 139, "Apollo": 323}
-DAYS_LEFT_TARGETS   = {"Maven": [25, 4], "Gemini": [25, 4], "Apollo": [25, 4]}  # [upper, lower] days-left
+DAYS_LEFT_TARGETS   = {"Maven": [25, 1], "Gemini": [25, 1], "Apollo": [25, 1]}  # [upper, lower] days-left
 
 # Mapping Product -> C macro name
 PRODUCT_MACROS = {"Maven": "CONFIG_PRODUCT_MAVEN",
@@ -44,10 +44,16 @@ TIME_OBJECTIVE  = "median"  # minimize “median-like” earliness
 USE_TIME_CONSTRAINED_IF_TIME_AVAILABLE = True
 
 # Neyman–Pearson selection (for ST @ lower target)
-NP_ALPHA_MISS     = 0.01
-NP_POS_BAND_BELOW = 2.0
+NP_ALPHA_MISS     = 0.005
+NP_POS_BAND_BELOW = 1.0
 NP_NEG_GAP        = 5.0
 NP_NEG_BAND_WIDTH = 10.0
+
+# --- ST conservatism controls (apply only to ST @ lower target) ---
+ST_USE_NEG_PERCENTILE = True      # force theta above a high percentile of healthy
+ST_NEG_PERCENTILE     = 99.9      # e.g., 95th percentile of x_neg for direction ">="
+ST_SAFETY_MARGIN_MV   = 0.0      # fixed upward bump in mV (tune 10–40 mV)
+
 
 # Rounding
 ROUND_THETA_MV = 0  # integer mV
@@ -160,7 +166,7 @@ def sweep_np_threshold(x_pos, x_neg, direction, alpha):
         cands.append((th, tpr, fpr)); cands.append(((th - eps) if direction==">=" else (th + eps), tpr2, fpr2))
     feasible = [(th,tpr,fpr) for th,tpr,fpr in cands if tpr >= (1.0 - alpha)]
     if feasible:
-        feasible.sort(key=lambda z: (z[2], -z[1])); return feasible[0]
+        feasible.sort(key=lambda z: (z[2], -z[1], -z[0])); return feasible[0]
     max_tpr = max(z[1] for z in cands)
     near = [z for z in cands if abs(z[1] - max_tpr) < 1e-12]
     near.sort(key=lambda z: z[2]); return near[0]
@@ -219,7 +225,28 @@ def select_theta_np(series_list, p):
     direction = direction_from_classes(series_list, p)
     x_pos, x_neg = summarize_per_file_for_np(series_list, p)
     th, tpr, fpr = sweep_np_threshold(x_pos, x_neg, direction, NP_ALPHA_MISS)
+
+    # --- FORCE CONSERVATISM FOR ST-STYLE SIGNALS ---
+    # We don't know the caller’s signal name here, so apply a generic conservative push.
+    # For droop signals (direction == ">="), "more conservative" means a *higher* theta.
+    # For voltage-like (direction == "<="), "more conservative" means a *lower* theta.
+    if np.isfinite(th) and direction is not None:
+        if ST_USE_NEG_PERCENTILE and x_neg.size > 0:
+            if direction == ">=":
+                # push above high end of healthy distribution
+                th = max(th, float(np.percentile(x_neg, ST_NEG_PERCENTILE)))
+            else:
+                # push below low end for "<=" signals
+                th = min(th, float(np.percentile(x_neg, 100.0 - ST_NEG_PERCENTILE)))
+
+        # add fixed safety margin
+        if direction == ">=":
+            th = th + ST_SAFETY_MARGIN_MV
+        else:
+            th = th - ST_SAFETY_MARGIN_MV
+
     return (float(th) if np.isfinite(th) else np.nan, direction, "np_backstop")
+
 
 def per_file_median_temp(df):
     if "temp" not in df.columns: return None
@@ -316,25 +343,23 @@ def main():
                 })
 
     # Print C blocks
-    for prod in ("Maven", "Gemini", "Apollo"):
+    for idx, prod in enumerate(("Maven", "Gemini", "Apollo")):
         macro = PRODUCT_MACROS[prod]
         entries = sorted(per_product_entries[prod], key=lambda r: r["temp"])
-        print(f"#if defined( {macro} )")
+        if idx == 0:
+            print(f"#if defined({macro})")
+        else:
+            print(f"#elif defined({macro})")
         print("static const BatteryThresholdVoltages_t temperatureDependentBatteryThresholds[] =")
         print("{")
-        if entries:
-            for i, r in enumerate(entries):
-                comma = "," if i < len(entries)-1 else ""
-                print(f"    {{")
-                print(f"        .thresholdTemp = {r['temp']},")
-                print(f"        .replacementRequiredOCVThreshold = {r['ocv_mV']},")
-                print(f"        .nonFunctionalSTDroopThreshold = {r['st_mV']}")
-                print(f"    }}{comma}")
-        else:
-            # Emit an empty array to keep compilation happy (or you can omit entirely)
-            pass
+        for i, r in enumerate(entries):
+            print("    {")
+            print(f"        .thresholdTemp = {r['temp']},")
+            print(f"        .replacementRequiredOCVThreshold = {r['ocv_mV']},")
+            print(f"        .nonFunctionalSTDroopThreshold = {r['st_mV']}")
+            print("    }" + ("," if i < len(entries)-1 else ""))
         print("};")
-        print("#endif\n")
+    print("#endif")
 
 if __name__ == "__main__":
     main()
